@@ -8,12 +8,14 @@ struct ImportPromptView: View {
             Image(systemName: "tablecells")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
-            Text("Importe ton classeur budget")
+            Text("Importe ta situation budgétaire")
                 .font(.title2.bold())
             Text("""
             Choisis un fichier Excel (.xlsx) depuis l'app Fichiers, notamment ton dossier \
-            OneDrive. Le classeur doit contenir une feuille "Transactions" (Date, Catégorie, \
-            Montant) et une feuille "Budget" (Catégorie, Budget).
+            OneDrive. Il doit s'agir d'un export "Situation Budgétaire" (une ligne par \
+            nomenclature, colonnes Article Nat., Groupe Section, Service Gestionnaire, \
+            Mt Voté CP, Mt Disponible). Si ton fichier est en .xls, convertis-le d'abord \
+            en .xlsx.
             """)
             .font(.subheadline)
             .foregroundStyle(.secondary)

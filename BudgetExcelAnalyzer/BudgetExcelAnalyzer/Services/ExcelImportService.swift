@@ -1,118 +1,136 @@
 import CoreXLSX
 import Foundation
 
-/// Reads a workbook expected to contain a "Transactions" sheet (Date, Catégorie, Montant,
-/// Description) and a "Budget" sheet (Catégorie, Budget) and turns it into typed models.
+/// Reads a flat budget-execution export (one row per nomenclature line, e.g. a
+/// "Situation Budgétaire" export) from the first sheet of the workbook.
 ///
-/// Header matching is case- and accent-insensitive and tolerant of a few common synonyms,
-/// since real-world exports rarely use exactly the same wording twice.
+/// Expected columns (case/accent-insensitive, exact wording otherwise):
+///   - "Article Nat. (Code)"            → nomenclature code
+///   - "Article Nat. (Libellé)"         → nomenclature label
+///   - "Groupe Section (Code)"          → "F" (Fonctionnement) / "I" (Investissement)
+///   - "Groupe Chapitre Nat. (Code)"    → chapter code (optional)
+///   - "Service Gestionnaire (Code)"    → managing service code
+///   - "Service Gestionnaire (Libellé)" → managing service label
+///   - "Mt Voté CP"                     → budgeted amount
+///   - "Mt Disponible"                  → remaining available amount
+///   - any column containing "Demandeur" (Code/Libellé) → requesting service (optional)
+///
+/// "Engagé" (spent) isn't a source column: it's derived as voté − disponible.
 enum ExcelImportService {
 
-    struct ImportResult {
-        let transactions: [Transaction]
-        let budgetLines: [BudgetLine]
-    }
+    private static let articleCodeHeaders = ["article nat. (code)"]
+    private static let articleLabelHeaders = ["article nat. (libelle)"]
+    private static let sectionHeaders = ["groupe section (code)"]
+    private static let chapitreHeaders = ["groupe chapitre nat. (code)"]
+    private static let serviceCodeHeaders = ["service gestionnaire (code)"]
+    private static let serviceLabelHeaders = ["service gestionnaire (libelle)"]
+    private static let voteHeaders = ["mt vote cp"]
+    private static let disponibleHeaders = ["mt disponible"]
 
-    private static let transactionSheetNames = ["transactions", "depenses", "operations", "mouvements"]
-    private static let budgetSheetNames = ["budget", "budgets"]
-
-    private static let dateHeaders = ["date", "jour"]
-    private static let categoryHeaders = ["categorie", "category", "poste"]
-    private static let amountHeaders = ["montant", "amount", "somme", "depense"]
-    private static let budgetAmountHeaders = ["budget", "montant budgete", "montant mensuel", "amount", "montant"]
-    private static let noteHeaders = ["description", "note", "libelle", "commentaire"]
-
-    static func importWorkbook(at url: URL) throws -> ImportResult {
+    static func importWorkbook(at url: URL) throws -> [BudgetLineItem] {
         guard let file = XLSXFile(filepath: url.path) else {
             throw ImportError.cannotOpenFile
         }
 
         let sharedStrings = try file.parseSharedStrings()
-        var transactions: [Transaction] = []
-        var budgetLines: [BudgetLine] = []
 
-        for workbook in try file.parseWorkbooks() {
-            for entry in try file.parseWorksheetPathsAndNames(workbook: workbook) {
-                guard let rawName = entry.name else { continue }
-                let normalizedName = ParsingUtils.normalize(rawName)
-                let worksheet = try file.parseWorksheet(at: entry.path)
-                let rows = worksheet.data?.rows ?? []
-
-                if transactionSheetNames.contains(normalizedName) {
-                    transactions = try parseTransactions(rows: rows, sharedStrings: sharedStrings, sheetName: rawName)
-                } else if budgetSheetNames.contains(normalizedName) {
-                    budgetLines = try parseBudget(rows: rows, sharedStrings: sharedStrings, sheetName: rawName)
-                }
-            }
+        guard let workbook = try file.parseWorkbooks().first,
+              let firstSheet = try file.parseWorksheetPathsAndNames(workbook: workbook).first else {
+            throw ImportError.emptyWorkbook
         }
 
-        if transactions.isEmpty && budgetLines.isEmpty {
+        let worksheet = try file.parseWorksheet(at: firstSheet.path)
+        let rows = worksheet.data?.rows ?? []
+        guard let header = rows.first else { throw ImportError.noData }
+
+        let columns = headerColumns(of: header, sharedStrings: sharedStrings)
+
+        guard let articleCodeColumn = firstMatch(articleCodeHeaders, in: columns) else {
+            throw ImportError.missingColumn("Article Nat. (Code)")
+        }
+        guard let articleLabelColumn = firstMatch(articleLabelHeaders, in: columns) else {
+            throw ImportError.missingColumn("Article Nat. (Libellé)")
+        }
+        guard let sectionColumn = firstMatch(sectionHeaders, in: columns) else {
+            throw ImportError.missingColumn("Groupe Section (Code)")
+        }
+        guard let serviceCodeColumn = firstMatch(serviceCodeHeaders, in: columns) else {
+            throw ImportError.missingColumn("Service Gestionnaire (Code)")
+        }
+        guard let serviceLabelColumn = firstMatch(serviceLabelHeaders, in: columns) else {
+            throw ImportError.missingColumn("Service Gestionnaire (Libellé)")
+        }
+        guard let voteColumn = firstMatch(voteHeaders, in: columns) else {
+            throw ImportError.missingColumn("Mt Voté CP")
+        }
+        guard let disponibleColumn = firstMatch(disponibleHeaders, in: columns) else {
+            throw ImportError.missingColumn("Mt Disponible")
+        }
+        let chapitreColumn = firstMatch(chapitreHeaders, in: columns)
+        let (demandeurCodeColumn, demandeurLabelColumn) = demandeurColumns(in: columns)
+
+        var results: [BudgetLineItem] = []
+        for row in rows.dropFirst() {
+            let cells = cellsByColumn(of: row, sharedStrings: sharedStrings)
+
+            guard let articleCode = cells[articleCodeColumn]?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !articleCode.isEmpty else { continue }
+            guard let serviceCodeRaw = cells[serviceCodeColumn],
+                  let serviceCode = Int(serviceCodeRaw.trimmingCharacters(in: .whitespacesAndNewlines)) else { continue }
+
+            let articleLabel = cells[articleLabelColumn]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? articleCode
+            let section = BudgetSection(code: cells[sectionColumn])
+            let serviceLabel = cells[serviceLabelColumn]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Service \(serviceCode)"
+            let voté = cells[voteColumn].flatMap(ParsingUtils.parseAmount) ?? 0
+            let disponible = cells[disponibleColumn].flatMap(ParsingUtils.parseAmount) ?? 0
+            let chapitre = chapitreColumn.flatMap { cells[$0] }?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let demandeur = resolveDemandeur(cells: cells, codeColumn: demandeurCodeColumn, labelColumn: demandeurLabelColumn)
+
+            results.append(
+                BudgetLineItem(
+                    articleCode: articleCode,
+                    articleLabel: articleLabel,
+                    section: section,
+                    chapitreCode: (chapitre?.isEmpty ?? true) ? nil : chapitre,
+                    serviceCode: serviceCode,
+                    serviceLabel: serviceLabel,
+                    demandeur: demandeur,
+                    voté: voté,
+                    disponible: disponible
+                )
+            )
+        }
+
+        if results.isEmpty {
             throw ImportError.noData
         }
-
-        return ImportResult(transactions: transactions, budgetLines: budgetLines)
-    }
-
-    // MARK: - Sheet parsing
-
-    private static func parseTransactions(
-        rows: [Row],
-        sharedStrings: SharedStrings?,
-        sheetName: String
-    ) throws -> [Transaction] {
-        guard let header = rows.first else { return [] }
-        let columns = headerColumns(of: header, sharedStrings: sharedStrings)
-
-        guard let dateColumn = firstMatch(dateHeaders, in: columns) else {
-            throw ImportError.missingColumn("Date", sheet: sheetName)
-        }
-        guard let categoryColumn = firstMatch(categoryHeaders, in: columns) else {
-            throw ImportError.missingColumn("Catégorie", sheet: sheetName)
-        }
-        guard let amountColumn = firstMatch(amountHeaders, in: columns) else {
-            throw ImportError.missingColumn("Montant", sheet: sheetName)
-        }
-        let noteColumn = firstMatch(noteHeaders, in: columns)
-
-        var results: [Transaction] = []
-        for row in rows.dropFirst() {
-            let cells = cellsByColumn(of: row, sharedStrings: sharedStrings)
-            guard let dateRaw = cells[dateColumn], let date = ParsingUtils.parseDate(dateRaw) else { continue }
-            guard let categoryRaw = cells[categoryColumn] else { continue }
-            let category = categoryRaw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !category.isEmpty else { continue }
-            guard let amountRaw = cells[amountColumn], let amount = ParsingUtils.parseAmount(amountRaw) else { continue }
-            let note = noteColumn.flatMap { cells[$0] }?.trimmingCharacters(in: .whitespacesAndNewlines)
-            results.append(Transaction(date: date, category: category, amount: amount, note: (note?.isEmpty ?? true) ? nil : note))
-        }
         return results
     }
 
-    private static func parseBudget(
-        rows: [Row],
-        sharedStrings: SharedStrings?,
-        sheetName: String
-    ) throws -> [BudgetLine] {
-        guard let header = rows.first else { return [] }
-        let columns = headerColumns(of: header, sharedStrings: sharedStrings)
+    // MARK: - "Service demandeur" detection
 
-        guard let categoryColumn = firstMatch(categoryHeaders, in: columns) else {
-            throw ImportError.missingColumn("Catégorie", sheet: sheetName)
-        }
-        guard let amountColumn = firstMatch(budgetAmountHeaders, in: columns) else {
-            throw ImportError.missingColumn("Budget", sheet: sheetName)
-        }
+    /// Mirrors the reference dashboard's logic: find any header containing "demandeur",
+    /// then split it into a code column and a label column, whatever their exact wording.
+    private static func demandeurColumns(in columns: [String: String]) -> (code: String?, label: String?) {
+        let demandeurEntries = columns.filter { $0.value.contains("demandeur") }
+        guard !demandeurEntries.isEmpty else { return (nil, nil) }
 
-        var results: [BudgetLine] = []
-        for row in rows.dropFirst() {
-            let cells = cellsByColumn(of: row, sharedStrings: sharedStrings)
-            guard let categoryRaw = cells[categoryColumn] else { continue }
-            let category = categoryRaw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !category.isEmpty else { continue }
-            guard let amountRaw = cells[amountColumn], let amount = ParsingUtils.parseAmount(amountRaw) else { continue }
-            results.append(BudgetLine(category: category, monthlyAmount: amount))
+        let codeColumn = demandeurEntries.first { $0.value.contains("code") }?.key
+        let labelColumn = demandeurEntries.first { $0.value.contains("libelle") }?.key
+            ?? demandeurEntries.first { $0.key != codeColumn }?.key
+
+        return (codeColumn, labelColumn)
+    }
+
+    private static func resolveDemandeur(cells: [String: String], codeColumn: String?, labelColumn: String?) -> String? {
+        let code = codeColumn.flatMap { cells[$0] }?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let label = labelColumn.flatMap { cells[$0] }?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var demandeur = (label?.isEmpty == false) ? label : ((code?.isEmpty == false) ? code : nil)
+        if let demandeurValue = demandeur, let code, !code.isEmpty, labelColumn != nil, code != demandeurValue {
+            demandeur = "\(code) — \(demandeurValue)"
         }
-        return results
+        return demandeur
     }
 
     // MARK: - Column helpers

@@ -1,13 +1,11 @@
 import Foundation
 
-/// Central app state: holds the last imported transactions/budget, the selected month for
-/// analysis, and a local JSON snapshot so the dashboard has data immediately on relaunch
-/// without re-reading the (possibly remote, OneDrive-backed) source file.
+/// Central app state: holds the last imported budget lines and a local JSON snapshot so
+/// the dashboard has data immediately on relaunch without re-reading the (possibly
+/// remote, OneDrive-backed) source file.
 @MainActor
 final class BudgetDataStore: ObservableObject {
-    @Published private(set) var transactions: [Transaction] = []
-    @Published private(set) var budgetLines: [BudgetLine] = []
-    @Published var selectedMonth: Date = Calendar.current.startOfMonth(for: Date())
+    @Published private(set) var lineItems: [BudgetLineItem] = []
     @Published private(set) var lastImportDate: Date?
     @Published private(set) var sourceFileName: String?
     @Published var errorMessage: String?
@@ -23,45 +21,45 @@ final class BudgetDataStore: ObservableObject {
         loadSnapshot()
     }
 
-    var availableMonths: [Date] {
-        let calendar = Calendar.current
-        let months = Set(transactions.map { calendar.startOfMonth(for: $0.date) })
-        return months.sorted(by: >)
+    /// Services present in the imported file, detected automatically (not hardcoded),
+    /// sorted by code.
+    var services: [ServiceSummary] {
+        let grouped = Dictionary(grouping: lineItems, by: \.serviceCode)
+        return grouped.map { code, items in
+            ServiceSummary(
+                serviceCode: code,
+                serviceLabel: items.first?.serviceLabel ?? "Service \(code)",
+                voté: items.reduce(0) { $0 + $1.voté },
+                engagé: items.reduce(0) { $0 + $1.engagé },
+                disponible: items.reduce(0) { $0 + $1.disponible }
+            )
+        }.sorted { $0.serviceCode < $1.serviceCode }
     }
 
-    var categorySummaries: [CategorySummary] {
-        let calendar = Calendar.current
-        let monthTransactions = transactions.filter {
-            calendar.isDate($0.date, equalTo: selectedMonth, toGranularity: .month)
-        }
-
-        var actualsByCategory: [String: Double] = [:]
-        for transaction in monthTransactions {
-            actualsByCategory[transaction.category, default: 0] += abs(transaction.amount)
-        }
-
-        var summaries: [CategorySummary] = []
-        var handledCategories = Set<String>()
-
-        for line in budgetLines {
-            let actual = actualsByCategory[line.category] ?? 0
-            summaries.append(CategorySummary(category: line.category, budget: line.monthlyAmount, actual: actual))
-            handledCategories.insert(line.category)
-        }
-
-        for (category, actual) in actualsByCategory where !handledCategories.contains(category) {
-            summaries.append(CategorySummary(category: category, budget: nil, actual: actual))
-        }
-
-        return summaries.sorted { $0.category.localizedCaseInsensitiveCompare($1.category) == .orderedAscending }
+    func nomenclature(forService serviceCode: Int) -> [NomenclatureSummary] {
+        groupByNomenclature(lineItems.filter { $0.serviceCode == serviceCode })
     }
 
-    var totalBudget: Double {
-        budgetLines.reduce(0) { $0 + $1.monthlyAmount }
+    var consolidatedNomenclature: [NomenclatureSummary] {
+        groupByNomenclature(lineItems)
     }
 
-    var totalActual: Double {
-        categorySummaries.reduce(0) { $0 + $1.actual }
+    var demandeurs: [String] {
+        Array(Set(lineItems.compactMap(\.demandeur))).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    private func groupByNomenclature(_ items: [BudgetLineItem]) -> [NomenclatureSummary] {
+        let grouped = Dictionary(grouping: items, by: \.articleCode)
+        return grouped.map { code, group in
+            NomenclatureSummary(
+                articleCode: code,
+                articleLabel: group.first?.articleLabel ?? code,
+                section: group.first?.section ?? .autre,
+                voté: group.reduce(0) { $0 + $1.voté },
+                engagé: group.reduce(0) { $0 + $1.engagé },
+                disponible: group.reduce(0) { $0 + $1.disponible }
+            )
+        }.sorted { $0.articleCode.localizedStandardCompare($1.articleCode) == .orderedAscending }
     }
 
     func importFile(from url: URL) async {
@@ -73,19 +71,15 @@ final class BudgetDataStore: ObservableObject {
         defer { if needsAccess { url.stopAccessingSecurityScopedResource() } }
 
         do {
-            let result = try await Task.detached(priority: .userInitiated) {
+            let items = try await Task.detached(priority: .userInitiated) {
                 try ExcelImportService.importWorkbook(at: url)
             }.value
 
             try BookmarkStore.save(url: url)
 
-            transactions = result.transactions
-            budgetLines = result.budgetLines
+            lineItems = items
             lastImportDate = Date()
             sourceFileName = url.lastPathComponent
-            if let latestMonth = availableMonths.first {
-                selectedMonth = latestMonth
-            }
             saveSnapshot()
         } catch {
             errorMessage = error.localizedDescription
@@ -103,20 +97,14 @@ final class BudgetDataStore: ObservableObject {
     // MARK: - Local snapshot persistence
 
     private struct Snapshot: Codable {
-        let transactions: [Transaction]
-        let budgetLines: [BudgetLine]
+        let lineItems: [BudgetLineItem]
         let lastImportDate: Date
         let sourceFileName: String
     }
 
     private func saveSnapshot() {
         guard let sourceFileName, let lastImportDate else { return }
-        let snapshot = Snapshot(
-            transactions: transactions,
-            budgetLines: budgetLines,
-            lastImportDate: lastImportDate,
-            sourceFileName: sourceFileName
-        )
+        let snapshot = Snapshot(lineItems: lineItems, lastImportDate: lastImportDate, sourceFileName: sourceFileName)
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         try? data.write(to: snapshotURL, options: .atomic)
     }
@@ -124,12 +112,8 @@ final class BudgetDataStore: ObservableObject {
     private func loadSnapshot() {
         guard let data = try? Data(contentsOf: snapshotURL),
               let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
-        transactions = snapshot.transactions
-        budgetLines = snapshot.budgetLines
+        lineItems = snapshot.lineItems
         lastImportDate = snapshot.lastImportDate
         sourceFileName = snapshot.sourceFileName
-        if let latestMonth = availableMonths.first {
-            selectedMonth = latestMonth
-        }
     }
 }

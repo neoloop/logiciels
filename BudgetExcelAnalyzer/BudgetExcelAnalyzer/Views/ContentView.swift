@@ -7,7 +7,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if store.transactions.isEmpty && store.budgetLines.isEmpty {
+                if store.lineItems.isEmpty {
                     ImportPromptView(isShowingFilePicker: $isShowingFilePicker)
                 } else {
                     DashboardView(isShowingFilePicker: $isShowingFilePicker)

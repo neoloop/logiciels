@@ -1,62 +1,67 @@
 # Budget Excel Analyzer (iOS)
 
-App SwiftUI qui lit un classeur Excel stocké dans OneDrive (via l'app Fichiers
-d'iOS) et compare les dépenses réelles à un budget par catégorie, mois par mois.
+App SwiftUI qui lit un export d'exécution budgétaire (type "Situation
+Budgétaire") stocké dans OneDrive via l'app Fichiers d'iOS, et affiche
+Voté / Engagé / Disponible par service et par nomenclature, avec envoi du
+résumé par email.
 
 > ⚠️ Ce projet a été écrit dans un environnement sans Xcode/Swift, donc le
 > code n'a pas pu être compilé ici. Il doit être buildé et testé sur un Mac
 > avec Xcode avant utilisation.
 
+## ⚠️ Format de fichier : .xlsx uniquement
+
+Le parsing utilise [CoreXLSX](https://github.com/CoreOffice/CoreXLSX), qui ne
+lit que le format **Office Open XML (.xlsx)**. Si ton export
+`Situation_Budgétaire` sort en **.xls** (ancien format binaire Excel
+97-2003), il faut le convertir en `.xlsx` avant de l'importer dans l'app
+(ouvrir dans Excel/Numbers/Google Sheets/OneDrive Online → "Enregistrer
+sous" / "Exporter" en `.xlsx`). Le sélecteur de fichiers de l'app ne filtre
+que sur `.xlsx`.
+
 ## Fonctionnement
 
 1. L'utilisateur importe un fichier `.xlsx` via le sélecteur de fichiers
-   iOS standard (`UIDocumentPickerViewController` / `.fileImporter`), qui
-   donne accès à tous les emplacements enregistrés dans l'app **Fichiers**
-   — y compris **OneDrive**, dès que l'app OneDrive est installée et connectée.
-2. Le fichier est parsé en local avec [CoreXLSX](https://github.com/CoreOffice/CoreXLSX)
-   (pure Swift, pas de dépendance native).
-3. Un "bookmark" sécurisé du fichier est conservé pour pouvoir le relire
-   plus tard (bouton "Importer" ou tirer pour rafraîchir) sans repasser par
-   le sélecteur.
-4. Les données parsées sont mises en cache localement (JSON dans
+   iOS standard (`.fileImporter`), qui donne accès à tous les emplacements
+   enregistrés dans l'app **Fichiers** — y compris **OneDrive**, dès que
+   l'app OneDrive est installée et connectée.
+2. Le fichier est parsé en local avec CoreXLSX (pure Swift, pas de
+   dépendance native). Une seule feuille est lue (la première), une ligne =
+   une ligne de nomenclature budgétaire.
+3. Les services (`Service Gestionnaire`) sont **détectés automatiquement**
+   à partir des données importées — rien n'est codé en dur, ça marche pour
+   n'importe quel service/année tant que les colonnes sont présentes.
+4. Un bookmark sécurisé du fichier est conservé pour pouvoir le relire plus
+   tard (bouton "Importer" ou tirer pour rafraîchir) sans repasser par le
+   sélecteur.
+5. Les données parsées sont mises en cache localement (JSON dans
    Application Support) pour que le dashboard s'affiche immédiatement au
    relancement de l'app.
+6. Depuis la fiche d'un service, "Envoyer par email" ouvre le compositeur
+   Mail natif d'iOS avec un résumé HTML (Voté/Engagé/Disponible par
+   nomenclature) pré-rempli ; l'adresse du destinataire est mémorisée par
+   service pour les envois suivants.
 
 ## Format du classeur Excel attendu
 
-Le classeur doit contenir deux feuilles :
+Une seule feuille, une ligne par nomenclature budgétaire. Colonnes
+attendues (reconnaissance insensible à la casse/accents) :
 
-### Feuille "Transactions" (ou "Dépenses" / "Opérations" / "Mouvements")
+| Colonne                             | Rôle                                             |
+|--------------------------------------|---------------------------------------------------|
+| `Article Nat. (Code)`                | Code de la nomenclature                            |
+| `Article Nat. (Libellé)`             | Libellé de la nomenclature                         |
+| `Groupe Section (Code)`              | `F` = Fonctionnement, `I` = Investissement         |
+| `Groupe Chapitre Nat. (Code)`        | Code chapitre (optionnel)                          |
+| `Service Gestionnaire (Code)`        | Code du service (ex : 58, 53, 52)                  |
+| `Service Gestionnaire (Libellé)`     | Libellé du service                                 |
+| `Mt Voté CP`                         | Montant budgété (crédits de paiement)              |
+| `Mt Disponible`                      | Montant restant disponible                         |
+| *(toute colonne contenant "Demandeur")* | Service demandeur — Code/Libellé, détecté automatiquement, stocké mais pas encore affiché en filtre dans la v1 |
 
-| Date       | Catégorie    | Montant | Description        |
-|------------|--------------|---------|---------------------|
-| 2026-09-03 | Alimentation | 45.20   | Courses Carrefour   |
-| 2026-09-05 | Transport    | 12.50   | Essence             |
-
-- **Date** : date Excel classique ou texte (`AAAA-MM-JJ`, `JJ/MM/AAAA`…).
-- **Catégorie** : doit correspondre (insensible à la casse/accents) aux
-  catégories de la feuille Budget pour être rapprochée automatiquement.
-- **Montant** : nombre, avec virgule ou point décimal, espaces/symboles
-  monétaires tolérés. La valeur absolue est utilisée comme dépense.
-- **Description** : optionnelle.
-
-### Feuille "Budget"
-
-| Catégorie    | Budget |
-|--------------|--------|
-| Alimentation | 400    |
-| Transport    | 100    |
-
-- **Catégorie** : nom de la catégorie.
-- **Budget** : montant budgété pour le mois, par catégorie.
-
-Les en-têtes de colonnes sont reconnus même avec des variantes proches
-(`Categorie`/`Catégorie`/`Category`, `Montant`/`Amount`, etc.) — voir
-`ExcelImportService.swift` pour la liste exacte des synonymes acceptés, et
-l'étendre si besoin.
-
-Les transactions dont la catégorie n'existe pas dans la feuille Budget sont
-affichées à part sous "Hors budget" pour repérer les dépenses non prévues.
+Le montant **Engagé** n'est pas une colonne source : il est calculé comme
+`Voté − Disponible`, comme dans le tableau de bord de référence dont ce
+format est extrait.
 
 ## Build
 
@@ -74,7 +79,10 @@ est régénéré à partir de `project.yml` à chaque fois. C'est plus fiable qu
 de committer un `.pbxproj` écrit à la main.
 
 Dans Xcode : sélectionner ton équipe de signature (Signing & Capabilities),
-puis Run sur un simulateur ou un appareil (iOS 17+).
+puis Run sur un simulateur ou un appareil (iOS 17+). Pour tester l'envoi
+d'email sur simulateur, le compte Mail doit être configuré dans l'app Mail
+du simulateur (Réglages → Mail → Comptes) ; sinon l'app affichera une
+alerte "Mail non configuré".
 
 ## Activer l'accès à OneDrive
 
@@ -94,23 +102,26 @@ BudgetExcelAnalyzer/
 ├── project.yml                  # config XcodeGen
 └── BudgetExcelAnalyzer/
     ├── App/                     # point d'entrée SwiftUI
-    ├── Models/                  # Transaction, BudgetLine, CategorySummary
-    ├── Services/                # import Excel, parsing, bookmark, store
+    ├── Models/                  # BudgetLineItem, BudgetSection, ServiceSummary, NomenclatureSummary
+    ├── Services/                # import Excel, parsing, bookmark, store, email
     └── Views/                   # écrans SwiftUI
 ```
 
-## Limites connues (MVP volontairement simple)
+## Limites connues (v1 volontairement ciblée)
 
-- Devise codée en dur en EUR (`CategoryRow.swift`, `DashboardView.swift`,
-  `TransactionListView.swift`) — facile à changer si besoin.
-- Un seul fichier source à la fois (pas de fusion multi-fichiers).
-- Pas d'édition des transactions/budget dans l'app : tout vient du fichier
-  Excel, qui reste la source de vérité.
-- Comparaison "réel vs budget" par mois calendaire, sans report d'un mois
-  sur l'autre.
+- Devise codée en dur en EUR (`Services/CurrencyFormatting.swift`).
+- Un seul fichier source à la fois (pas de fusion multi-fichiers,
+  pas d'évolution pluriannuelle).
+- Le filtre par "Service demandeur" n'a pas d'interface dans la v1 : le
+  champ est parsé et stocké sur chaque ligne, mais pas encore exposé en
+  filtre dans le dashboard.
+- Pas d'export PDF : l'email envoyé contient un tableau HTML, pas de pièce
+  jointe PDF.
+- Pas d'édition des données dans l'app : tout vient du fichier Excel, qui
+  reste la source de vérité.
 
 ## Prochaines étapes possibles
 
-- Graphiques d'évolution mensuelle (Swift Charts).
-- Alertes de dépassement (notifications locales).
-- Édition du budget directement dans l'app.
+- Filtre "Service demandeur" dans le dashboard.
+- Export PDF par service (en pièce jointe de l'email).
+- Graphiques (Swift Charts) de répartition Fonctionnement/Investissement.
