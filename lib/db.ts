@@ -28,7 +28,17 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS settings (
     user_email TEXT PRIMARY KEY,
-    follow_up_delay_days INTEGER NOT NULL DEFAULT 3
+    follow_up_delay_days INTEGER NOT NULL DEFAULT 3,
+    sync_interval_minutes INTEGER NOT NULL DEFAULT 15,
+    last_synced_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS oauth_tokens (
+    user_email TEXT PRIMARY KEY,
+    refresh_token TEXT NOT NULL,
+    access_token TEXT,
+    access_token_expires INTEGER,
+    updated_at TEXT NOT NULL
   );
 `);
 
@@ -48,7 +58,20 @@ export interface TrackedEmail {
   web_link: string | null;
 }
 
+export interface Settings {
+  followUpDelayDays: number;
+  syncIntervalMinutes: number;
+  lastSyncedAt: string | null;
+}
+
+export interface OAuthTokens {
+  refreshToken: string;
+  accessToken: string | null;
+  accessTokenExpires: number | null;
+}
+
 const DEFAULT_DELAY_DAYS = Number(process.env.DEFAULT_FOLLOW_UP_DELAY_DAYS ?? 3);
+const DEFAULT_SYNC_INTERVAL_MINUTES = Number(process.env.DEFAULT_SYNC_INTERVAL_MINUTES ?? 15);
 
 export function upsertTrackedEmail(email: {
   id: string;
@@ -109,18 +132,105 @@ export function getTrackedEmail(id: string, userEmail: string): TrackedEmail | u
     .get({ id, userEmail }) as TrackedEmail | undefined;
 }
 
-export function getFollowUpDelayDays(userEmail: string): number {
+function ensureSettingsRow(userEmail: string) {
+  db.prepare(
+    `INSERT INTO settings (user_email, follow_up_delay_days, sync_interval_minutes)
+     VALUES (@userEmail, @delay, @interval)
+     ON CONFLICT (user_email) DO NOTHING`
+  ).run({ userEmail, delay: DEFAULT_DELAY_DAYS, interval: DEFAULT_SYNC_INTERVAL_MINUTES });
+}
+
+export function getSettings(userEmail: string): Settings {
   const row = db
-    .prepare(`SELECT follow_up_delay_days FROM settings WHERE user_email = @userEmail`)
-    .get({ userEmail }) as { follow_up_delay_days: number } | undefined;
-  return row?.follow_up_delay_days ?? DEFAULT_DELAY_DAYS;
+    .prepare(
+      `SELECT follow_up_delay_days, sync_interval_minutes, last_synced_at FROM settings WHERE user_email = @userEmail`
+    )
+    .get({ userEmail }) as
+    | { follow_up_delay_days: number; sync_interval_minutes: number; last_synced_at: string | null }
+    | undefined;
+
+  return {
+    followUpDelayDays: row?.follow_up_delay_days ?? DEFAULT_DELAY_DAYS,
+    syncIntervalMinutes: row?.sync_interval_minutes ?? DEFAULT_SYNC_INTERVAL_MINUTES,
+    lastSyncedAt: row?.last_synced_at ?? null,
+  };
+}
+
+export function getFollowUpDelayDays(userEmail: string): number {
+  return getSettings(userEmail).followUpDelayDays;
 }
 
 export function setFollowUpDelayDays(userEmail: string, days: number) {
+  ensureSettingsRow(userEmail);
+  db.prepare(`UPDATE settings SET follow_up_delay_days = @days WHERE user_email = @userEmail`).run({
+    userEmail,
+    days,
+  });
+}
+
+export function setSyncIntervalMinutes(userEmail: string, minutes: number) {
+  ensureSettingsRow(userEmail);
+  db.prepare(`UPDATE settings SET sync_interval_minutes = @minutes WHERE user_email = @userEmail`).run({
+    userEmail,
+    minutes,
+  });
+}
+
+export function touchLastSyncedAt(userEmail: string, at: string) {
+  ensureSettingsRow(userEmail);
+  db.prepare(`UPDATE settings SET last_synced_at = @at WHERE user_email = @userEmail`).run({
+    userEmail,
+    at,
+  });
+}
+
+export function listUserEmailsWithSyncEnabled(): string[] {
+  const rows = db
+    .prepare(`SELECT user_email FROM settings WHERE sync_interval_minutes > 0`)
+    .all() as { user_email: string }[];
+  return rows.map((r) => r.user_email);
+}
+
+export function saveOAuthTokens(
+  userEmail: string,
+  tokens: { refreshToken: string; accessToken?: string | null; accessTokenExpires?: number | null }
+) {
   db.prepare(
-    `INSERT INTO settings (user_email, follow_up_delay_days) VALUES (@userEmail, @days)
-     ON CONFLICT (user_email) DO UPDATE SET follow_up_delay_days = @days`
-  ).run({ userEmail, days });
+    `INSERT INTO oauth_tokens (user_email, refresh_token, access_token, access_token_expires, updated_at)
+     VALUES (@userEmail, @refreshToken, @accessToken, @accessTokenExpires, @updatedAt)
+     ON CONFLICT (user_email) DO UPDATE SET
+       refresh_token = @refreshToken,
+       access_token = @accessToken,
+       access_token_expires = @accessTokenExpires,
+       updated_at = @updatedAt`
+  ).run({
+    userEmail,
+    refreshToken: tokens.refreshToken,
+    accessToken: tokens.accessToken ?? null,
+    accessTokenExpires: tokens.accessTokenExpires ?? null,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export function getOAuthTokens(userEmail: string): OAuthTokens | undefined {
+  const row = db
+    .prepare(
+      `SELECT refresh_token, access_token, access_token_expires FROM oauth_tokens WHERE user_email = @userEmail`
+    )
+    .get({ userEmail }) as
+    | { refresh_token: string; access_token: string | null; access_token_expires: number | null }
+    | undefined;
+
+  if (!row) return undefined;
+  return {
+    refreshToken: row.refresh_token,
+    accessToken: row.access_token,
+    accessTokenExpires: row.access_token_expires,
+  };
+}
+
+export function deleteOAuthTokens(userEmail: string) {
+  db.prepare(`DELETE FROM oauth_tokens WHERE user_email = @userEmail`).run({ userEmail });
 }
 
 export default db;

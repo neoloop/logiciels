@@ -8,6 +8,8 @@ Microsoft Graph pour :
 - lister tes mails envoyés récemment,
 - détecter automatiquement si tu as reçu une réponse dans la même conversation,
 - te signaler ceux restés sans réponse après un délai configurable,
+- se **synchroniser tout seul à intervalle régulier**, tant que l'application
+  tourne (même onglet fermé),
 - te permettre de créer en un clic un **brouillon** de relance (jamais d'envoi
   automatique : tu relis et tu envoies toi-même depuis Outlook).
 
@@ -79,11 +81,28 @@ compte Microsoft 365, puis clique sur **Synchroniser avec Outlook**.
   `createReply`) pré-rempli avec un message de relance, et l'ouvre dans
   Outlook Web pour que tu le relises et l'envoies toi-même.
 
+### Synchronisation automatique
+
+Un menu déroulant dans l'interface ("Synchro automatique") permet de choisir
+un intervalle (15 min / 30 min / 1 h / 2 h / 4 h, ou désactivé). Tant que le
+serveur Next.js tourne (`npm run dev` ou `npm start`), un job en arrière-plan
+vérifie toutes les 5 minutes si l'un des utilisateurs connectés est dû pour
+une synchro, et l'exécute automatiquement — sans que le navigateur ait besoin
+d'être ouvert. La page se recharge elle-même toutes les 60 secondes pour
+afficher les résultats.
+
+Pour que ça fonctionne sans être reconnecté en permanence, le token de
+rafraîchissement Microsoft (obtenu après ta connexion) est conservé dans la
+table `oauth_tokens` de la base SQLite locale (`data/tracker.db`, jamais
+commitée — voir `.gitignore`). C'est un compromis assumé pour un outil
+**local et mono-utilisateur** : ne partage pas ce fichier et ne déploie pas
+cette app telle quelle sur un serveur partagé sans revoir ce point.
+
 ### Limites connues
 
 - Seuls les mails ayant des destinataires "À" sont suivis.
 - Une réponse déplacée automatiquement hors de la boîte de réception (règle
   Outlook) ne sera pas détectée par la vérification actuelle, qui ne
   regarde que `Inbox`.
-- La synchronisation est manuelle (bouton), il n'y a pas de tâche planifiée
-  en arrière-plan.
+- La synchronisation automatique nécessite que le serveur reste lancé ; elle
+  s'arrête si tu fermes `npm run dev`.

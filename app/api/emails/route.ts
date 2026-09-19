@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth-options";
-import { listTrackedEmails, getFollowUpDelayDays } from "@/lib/db";
+import { listTrackedEmails, getSettings } from "@/lib/db";
 import { computeDisplayStatus } from "@/lib/status";
 
 export async function GET() {
@@ -11,12 +11,12 @@ export async function GET() {
   }
 
   const userEmail = session.user.email;
-  const delayDays = getFollowUpDelayDays(userEmail);
+  const settings = getSettings(userEmail);
   const emails = listTrackedEmails(userEmail).map((email) => ({
     ...email,
     to_recipients: JSON.parse(email.to_recipients) as string[],
-    display_status: computeDisplayStatus(email, delayDays),
+    display_status: computeDisplayStatus(email, settings.followUpDelayDays),
   }));
 
-  return NextResponse.json({ emails, delayDays });
+  return NextResponse.json({ emails, ...settings });
 }

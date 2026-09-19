@@ -26,10 +26,25 @@ function formatDate(iso: string) {
   });
 }
 
+const SYNC_INTERVAL_OPTIONS = [
+  { value: 0, label: "Désactivée (manuelle uniquement)" },
+  { value: 15, label: "Toutes les 15 min" },
+  { value: 30, label: "Toutes les 30 min" },
+  { value: 60, label: "Toutes les heures" },
+  { value: 120, label: "Toutes les 2 heures" },
+  { value: 240, label: "Toutes les 4 heures" },
+];
+
+// Rafraîchit juste la liste affichée (sans appeler Outlook) pour montrer les
+// résultats de la synchronisation automatique en arrière-plan.
+const LIST_REFRESH_MS = 60 * 1000;
+
 export default function Dashboard({ userName }: { userName: string }) {
   const [emails, setEmails] = useState<EmailRow[]>([]);
   const [delayDays, setDelayDays] = useState(3);
   const [delayInput, setDelayInput] = useState("3");
+  const [syncIntervalMinutes, setSyncIntervalMinutes] = useState(15);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [followUpBusyId, setFollowUpBusyId] = useState<string | null>(null);
@@ -44,13 +59,22 @@ export default function Dashboard({ userName }: { userName: string }) {
     }
     const data = await res.json();
     setEmails(data.emails);
-    setDelayDays(data.delayDays);
-    setDelayInput(String(data.delayDays));
+    setDelayDays(data.followUpDelayDays);
+    setDelayInput(String(data.followUpDelayDays));
+    setSyncIntervalMinutes(data.syncIntervalMinutes);
+    setLastSyncedAt(data.lastSyncedAt);
     setError(null);
   }, []);
 
   useEffect(() => {
     loadEmails().finally(() => setLoading(false));
+  }, [loadEmails]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      loadEmails();
+    }, LIST_REFRESH_MS);
+    return () => clearInterval(id);
   }, [loadEmails]);
 
   const handleSync = async () => {
@@ -114,6 +138,19 @@ export default function Dashboard({ userName }: { userName: string }) {
     }
   };
 
+  const handleSyncIntervalChange = async (value: number) => {
+    setSyncIntervalMinutes(value);
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ syncIntervalMinutes: value }),
+    });
+    if (!res.ok) {
+      setError("Impossible d'enregistrer l'intervalle de synchronisation.");
+      await loadEmails();
+    }
+  };
+
   const visibleEmails = emails.filter((e) => filter === "all" || e.display_status === filter);
   const needsFollowUpCount = emails.filter((e) => e.display_status === "needs_follow_up").length;
 
@@ -162,6 +199,26 @@ export default function Dashboard({ userName }: { userName: string }) {
             </button>
           )}
         </div>
+
+        <div className="flex items-center gap-2 text-sm text-slate-600">
+          <label htmlFor="sync-interval">Synchro automatique</label>
+          <select
+            id="sync-interval"
+            value={syncIntervalMinutes}
+            onChange={(e) => handleSyncIntervalChange(Number(e.target.value))}
+            className="rounded border border-slate-300 px-2 py-1"
+          >
+            {SYNC_INTERVAL_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {lastSyncedAt && (
+          <span className="text-xs text-slate-400">Dernière synchro : {formatDate(lastSyncedAt)}</span>
+        )}
 
         {needsFollowUpCount > 0 && (
           <span className="ml-auto rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800">
@@ -272,7 +329,8 @@ export default function Dashboard({ userName }: { userName: string }) {
 
       <p className="mt-6 text-xs text-slate-400">
         « Relancer » crée un brouillon de réponse dans Outlook et l&apos;ouvre pour relecture — rien n&apos;est
-        envoyé automatiquement.
+        envoyé automatiquement. La synchro automatique tourne côté serveur tant que l&apos;application est
+        lancée (<code>npm run dev</code>/<code>npm start</code>), même si cette page est fermée.
       </p>
     </div>
   );
