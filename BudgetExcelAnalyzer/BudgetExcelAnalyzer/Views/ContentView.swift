@@ -13,7 +13,19 @@ struct ContentView: View {
                     DashboardView(isShowingFilePicker: $isShowingFilePicker)
                 }
             }
-            .navigationTitle("Budget")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 8) {
+                        Image("SIS2BLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 28, height: 28)
+                        Text("Budget GR SIC")
+                            .font(.headline)
+                    }
+                }
+            }
             .fileImporter(
                 isPresented: $isShowingFilePicker,
                 allowedContentTypes: [.excelWorkbook, .xlsxExtension, .legacyExcelWorkbook, .xlsExtension],
