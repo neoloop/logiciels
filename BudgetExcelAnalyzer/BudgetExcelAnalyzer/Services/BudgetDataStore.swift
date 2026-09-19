@@ -72,7 +72,7 @@ final class BudgetDataStore: ObservableObject {
 
         do {
             let items = try await Task.detached(priority: .userInitiated) {
-                try ExcelImportService.importWorkbook(at: url)
+                try Self.readCoordinated(at: url)
             }.value
 
             try BookmarkStore.save(url: url)
@@ -92,6 +92,26 @@ final class BudgetDataStore: ObservableObject {
             return
         }
         await importFile(from: url)
+    }
+
+    /// Reads through NSFileCoordinator so cloud-backed providers (OneDrive, iCloud Drive…)
+    /// fully download the file's actual content before CoreXLSX tries to open it as a zip —
+    /// reading the raw picker URL directly can otherwise hit a not-yet-materialized placeholder.
+    private static func readCoordinated(at url: URL) throws -> [BudgetLineItem] {
+        var coordinatorError: NSError?
+        var result: Result<[BudgetLineItem], Error>?
+
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordinatorError) { coordinatedURL in
+            result = Result { try ExcelImportService.importWorkbook(at: coordinatedURL) }
+        }
+
+        if let coordinatorError {
+            throw coordinatorError
+        }
+        guard let result else {
+            throw ImportError.cannotOpenFile
+        }
+        return try result.get()
     }
 
     // MARK: - Local snapshot persistence
