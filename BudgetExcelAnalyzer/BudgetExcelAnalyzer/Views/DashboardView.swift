@@ -22,6 +22,12 @@ struct DashboardView: View {
                 }
             }
 
+            Section("Commandes") {
+                NavigationLink("Commandes et projets") {
+                    CommandesRootView()
+                }
+            }
+
             if let lastImportDate = store.lastImportDate {
                 Section {
                     VStack(alignment: .leading, spacing: 4) {

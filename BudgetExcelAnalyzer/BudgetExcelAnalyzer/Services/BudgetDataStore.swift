@@ -77,7 +77,7 @@ final class BudgetDataStore: ObservableObject {
                 try Self.readCoordinated(at: url)
             }.value
 
-            try BookmarkStore.save(url: url)
+            try BookmarkStore.save(url: url, namespace: Self.bookmarkNamespace)
 
             lineItems = items
             lastImportDate = Date()
@@ -89,7 +89,7 @@ final class BudgetDataStore: ObservableObject {
     }
 
     func refreshFromSavedBookmark() async {
-        guard let url = BookmarkStore.resolve() else {
+        guard let url = BookmarkStore.resolve(namespace: Self.bookmarkNamespace) else {
             errorMessage = "Aucun fichier enregistré. Importe à nouveau ton classeur."
             return
         }
@@ -99,9 +99,11 @@ final class BudgetDataStore: ObservableObject {
     /// Silent variant used to auto-refresh whenever the app becomes active: does nothing
     /// (no error shown) if no file has ever been imported yet.
     func autoRefreshIfPossible() async {
-        guard let url = BookmarkStore.resolve() else { return }
+        guard let url = BookmarkStore.resolve(namespace: Self.bookmarkNamespace) else { return }
         await importFile(from: url)
     }
+
+    private static let bookmarkNamespace = "budget"
 
     /// Reads through NSFileCoordinator so cloud-backed providers (OneDrive, iCloud Drive…)
     /// fully download the file's actual content before CoreXLSX tries to open it as a zip —

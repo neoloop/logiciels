@@ -46,35 +46,35 @@ enum ExcelImportService {
         let rows = worksheet.data?.rows ?? []
         guard let header = rows.first else { throw ImportError.noData }
 
-        let columns = headerColumns(of: header, sharedStrings: sharedStrings)
+        let columns = ExcelSheetParsing.headerColumns(of: header, sharedStrings: sharedStrings)
 
-        guard let articleCodeColumn = firstMatch(articleCodeHeaders, in: columns) else {
+        guard let articleCodeColumn = ExcelSheetParsing.firstMatch(articleCodeHeaders, in: columns) else {
             throw ImportError.missingColumn("Article Nat. (Code)")
         }
-        guard let articleLabelColumn = firstMatch(articleLabelHeaders, in: columns) else {
+        guard let articleLabelColumn = ExcelSheetParsing.firstMatch(articleLabelHeaders, in: columns) else {
             throw ImportError.missingColumn("Article Nat. (Libellé)")
         }
-        guard let sectionColumn = firstMatch(sectionHeaders, in: columns) else {
+        guard let sectionColumn = ExcelSheetParsing.firstMatch(sectionHeaders, in: columns) else {
             throw ImportError.missingColumn("Groupe Section (Code)")
         }
-        guard let serviceCodeColumn = firstMatch(serviceCodeHeaders, in: columns) else {
+        guard let serviceCodeColumn = ExcelSheetParsing.firstMatch(serviceCodeHeaders, in: columns) else {
             throw ImportError.missingColumn("Service Gestionnaire (Code)")
         }
-        guard let serviceLabelColumn = firstMatch(serviceLabelHeaders, in: columns) else {
+        guard let serviceLabelColumn = ExcelSheetParsing.firstMatch(serviceLabelHeaders, in: columns) else {
             throw ImportError.missingColumn("Service Gestionnaire (Libellé)")
         }
-        guard let voteColumn = firstMatch(voteHeaders, in: columns) else {
+        guard let voteColumn = ExcelSheetParsing.firstMatch(voteHeaders, in: columns) else {
             throw ImportError.missingColumn("Mt Voté CP")
         }
-        guard let disponibleColumn = firstMatch(disponibleHeaders, in: columns) else {
+        guard let disponibleColumn = ExcelSheetParsing.firstMatch(disponibleHeaders, in: columns) else {
             throw ImportError.missingColumn("Mt Disponible")
         }
-        let chapitreColumn = firstMatch(chapitreHeaders, in: columns)
+        let chapitreColumn = ExcelSheetParsing.firstMatch(chapitreHeaders, in: columns)
         let (demandeurCodeColumn, demandeurLabelColumn) = demandeurColumns(in: columns)
 
         var results: [BudgetLineItem] = []
         for row in rows.dropFirst() {
-            let cells = cellsByColumn(of: row, sharedStrings: sharedStrings)
+            let cells = ExcelSheetParsing.cellsByColumn(of: row, sharedStrings: sharedStrings)
 
             guard let articleCode = cells[articleCodeColumn]?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !articleCode.isEmpty else { continue }
@@ -134,48 +134,5 @@ enum ExcelImportService {
             demandeur = "\(code) — \(demandeurValue)"
         }
         return demandeur
-    }
-
-    // MARK: - Column helpers
-
-    /// Maps column letters (e.g. "A", "B") to the normalized header text found in that column.
-    private static func headerColumns(of row: Row, sharedStrings: SharedStrings?) -> [String: String] {
-        var mapping: [String: String] = [:]
-        for cell in row.cells {
-            guard let text = textValue(of: cell, sharedStrings: sharedStrings) else { continue }
-            mapping[columnLetters(of: cell)] = ParsingUtils.normalize(text)
-        }
-        return mapping
-    }
-
-    /// Maps column letters to the raw cell text for a data row.
-    private static func cellsByColumn(of row: Row, sharedStrings: SharedStrings?) -> [String: String] {
-        var mapping: [String: String] = [:]
-        for cell in row.cells {
-            mapping[columnLetters(of: cell)] = textValue(of: cell, sharedStrings: sharedStrings)
-        }
-        return mapping
-    }
-
-    /// Resolves a cell's textual/numeric content regardless of whether it's a shared string,
-    /// an inline string, or a raw number, without depending on CoreXLSX's exact stringValue
-    /// optionality across versions.
-    private static func textValue(of cell: Cell, sharedStrings: SharedStrings?) -> String? {
-        if let sharedStrings, let resolved = cell.stringValue(sharedStrings) {
-            return resolved
-        }
-        return cell.value
-    }
-
-    private static func columnLetters(of cell: Cell) -> String {
-        let description = String(describing: cell.reference)
-        return String(description.prefix(while: { $0.isLetter }))
-    }
-
-    private static func firstMatch(_ candidates: [String], in columns: [String: String]) -> String? {
-        for (letters, header) in columns where candidates.contains(header) {
-            return letters
-        }
-        return nil
     }
 }
