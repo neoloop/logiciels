@@ -39,10 +39,19 @@ open GLPIInterventions.xcodeproj
 ```
 
 Dans Xcode : sélectionnez le target `GLPIInterventions` ▸ Signing &
-Capabilities ▸ choisissez votre équipe de développement. La capacité *Push
-Notifications* et le mode arrière-plan *Remote notifications* sont déjà
-déclarés (`GLPIInterventions.entitlements`, `project.yml`) ; Xcode
-régénérera le profil de provisionnement correspondant automatiquement.
+Capabilities ▸ choisissez votre équipe de développement.
+
+> **Compte développeur personnel (gratuit)** : la capacité *Push
+> Notifications* n'est volontairement **pas** déclarée dans le projet, car
+> elle n'est pas disponible avec un compte Apple "Personal Team" gratuit
+> (uniquement avec le programme Apple Developer payant, 99$/an) et ferait
+> échouer la signature automatique. L'app compile et fonctionne
+> normalement sans elle ; seul le bouton "Notifications push" des Réglages
+> échouera silencieusement (message d'erreur affiché). Si vous rejoignez
+> le programme payant, ajoutez la capacité manuellement dans Xcode
+> (Signing & Capabilities ▸ **+ Capability** ▸ *Push Notifications*, qui
+> génère automatiquement le fichier d'entitlements et active le mode
+> arrière-plan *Remote notifications*).
 
 Lancez ensuite sur simulateur ou appareil avec ⌘R, ou exécutez les tests
 unitaires avec ⌘U (voir `GLPIInterventionsTests/`).

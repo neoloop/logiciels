@@ -23,13 +23,7 @@ targets:
       properties:
         CFBundleDisplayName: GLPI Interventions
         UILaunchScreen: {}
-        UIBackgroundModes:
-          - remote-notification
         ITSAppUsesNonExemptEncryption: false
-    entitlements:
-      path: GLPIInterventions/GLPIInterventions.entitlements
-      properties:
-        aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.neoloop.glpiinterventions
