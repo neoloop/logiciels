@@ -106,7 +106,7 @@ final class BudgetDataStore: ObservableObject {
     /// Reads through NSFileCoordinator so cloud-backed providers (OneDrive, iCloud Drive…)
     /// fully download the file's actual content before CoreXLSX tries to open it as a zip —
     /// reading the raw picker URL directly can otherwise hit a not-yet-materialized placeholder.
-    private static func readCoordinated(at url: URL) throws -> [BudgetLineItem] {
+    nonisolated private static func readCoordinated(at url: URL) throws -> [BudgetLineItem] {
         var coordinatorError: NSError?
         var result: Result<[BudgetLineItem], Error>?
 
