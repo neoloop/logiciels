@@ -56,6 +56,16 @@ struct CommandesContentView: View {
         return items.filter { $0.serviceCode == selectedServiceCode }
     }
 
+    /// Union of every service code seen anywhere: Expression/PPI (store.serviceCodes) plus
+    /// whatever "Service Gestionnaire"/"Service Destinataire" values show up in Sedit, even
+    /// if they're services that never appear in Expression itself.
+    private var allServiceCodes: [Int] {
+        var codes = Set(store.serviceCodes)
+        codes.formUnion(seditStore.commandes.compactMap(\.serviceCode))
+        codes.formUnion(seditStore.commandes.compactMap(\.serviceDestinataire))
+        return codes.sorted { ServiceDisplayOverrides.sortRank(forServiceCode: $0) < ServiceDisplayOverrides.sortRank(forServiceCode: $1) }
+    }
+
     private var scopeLabel: String {
         selectedServiceCode.map { store.serviceDisplayName($0) } ?? "Tous les services"
     }
@@ -73,10 +83,10 @@ struct CommandesContentView: View {
                 }
                 .pickerStyle(.segmented)
 
-                if store.serviceCodes.count > 1 {
+                if allServiceCodes.count > 1 {
                     Picker("Service", selection: $selectedServiceCode) {
                         Text("Tous les services").tag(Int?.none)
-                        ForEach(store.serviceCodes, id: \.self) { code in
+                        ForEach(allServiceCodes, id: \.self) { code in
                             Text(store.serviceDisplayName(code)).tag(Int?.some(code))
                         }
                     }
