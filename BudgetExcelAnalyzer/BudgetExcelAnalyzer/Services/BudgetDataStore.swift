@@ -96,6 +96,13 @@ final class BudgetDataStore: ObservableObject {
         await importFile(from: url)
     }
 
+    /// Silent variant used to auto-refresh whenever the app becomes active: does nothing
+    /// (no error shown) if no file has ever been imported yet.
+    func autoRefreshIfPossible() async {
+        guard let url = BookmarkStore.resolve() else { return }
+        await importFile(from: url)
+    }
+
     /// Reads through NSFileCoordinator so cloud-backed providers (OneDrive, iCloud Drive…)
     /// fully download the file's actual content before CoreXLSX tries to open it as a zip —
     /// reading the raw picker URL directly can otherwise hit a not-yet-materialized placeholder.
