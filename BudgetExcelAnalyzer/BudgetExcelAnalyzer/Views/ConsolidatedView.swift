@@ -2,19 +2,37 @@ import SwiftUI
 
 struct ConsolidatedView: View {
     @EnvironmentObject private var store: BudgetDataStore
+    @State private var selectedServiceCode: Int?
 
+    private var nomenclature: [NomenclatureSummary] {
+        if let selectedServiceCode {
+            store.nomenclature(forService: selectedServiceCode)
+        } else {
+            store.consolidatedNomenclature
+        }
+    }
     private var fonctionnement: [NomenclatureSummary] {
-        store.consolidatedNomenclature.filter { $0.section == .fonctionnement }
+        nomenclature.filter { $0.section == .fonctionnement }
     }
     private var investissement: [NomenclatureSummary] {
-        store.consolidatedNomenclature.filter { $0.section == .investissement }
+        nomenclature.filter { $0.section == .investissement }
     }
     private var autre: [NomenclatureSummary] {
-        store.consolidatedNomenclature.filter { $0.section == .autre }
+        nomenclature.filter { $0.section == .autre }
     }
 
     var body: some View {
         List {
+            Section {
+                Picker("Service", selection: $selectedServiceCode) {
+                    Text("Tous les services").tag(Int?.none)
+                    ForEach(store.services) { service in
+                        Text(service.serviceLabel).tag(Int?.some(service.serviceCode))
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
             if !fonctionnement.isEmpty {
                 Section("Fonctionnement") {
                     ForEach(fonctionnement) { NomenclatureRow(summary: $0) }
@@ -33,7 +51,7 @@ struct ConsolidatedView: View {
         }
         .navigationTitle("Consolidation")
         .overlay {
-            if store.consolidatedNomenclature.isEmpty {
+            if nomenclature.isEmpty {
                 ContentUnavailableView(
                     "Aucune donnée",
                     systemImage: "tray",
