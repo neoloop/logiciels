@@ -5,8 +5,15 @@ struct ProjetRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(projet.nom)
-                .font(.body.weight(.medium))
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(projet.nom)
+                    .font(.body.weight(.medium))
+                if let articleCode = projet.articleCode, !articleCode.isEmpty {
+                    Text(articleCode)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+            }
             ProgressView(value: projet.percentUsed)
                 .tint(projet.isOverBudget ? .red : .accentColor)
             HStack {

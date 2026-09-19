@@ -4,14 +4,27 @@ struct CommandesContentView: View {
     @EnvironmentObject private var store: CommandesDataStore
     @Binding var isShowingFilePicker: Bool
     @State private var selectedServiceCode: Int?
+    @State private var selectedTab: Tab = .projets
+
+    private enum Tab: String, CaseIterable {
+        case projets = "Projets"
+        case commandes = "Commandes"
+    }
 
     private var filteredCommandes: [CommandeLine] { store.commandes(forService: selectedServiceCode) }
     private var filteredProjets: [ProjetLine] { store.projets(forService: selectedServiceCode) }
 
     var body: some View {
         List {
-            if store.serviceCodes.count > 1 {
-                Section {
+            Section {
+                Picker("Vue", selection: $selectedTab) {
+                    ForEach(Tab.allCases, id: \.self) { tab in
+                        Text(tab.rawValue).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                if store.serviceCodes.count > 1 {
                     Picker("Service", selection: $selectedServiceCode) {
                         Text("Tous les services").tag(Int?.none)
                         ForEach(store.serviceCodes, id: \.self) { code in
@@ -22,21 +35,24 @@ struct CommandesContentView: View {
                 }
             }
 
-            Section("Projets") {
-                if filteredProjets.isEmpty {
-                    Text("Aucun projet")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(filteredProjets) { ProjetRow(projet: $0) }
+            switch selectedTab {
+            case .projets:
+                Section("Projets (\(filteredProjets.count))") {
+                    if filteredProjets.isEmpty {
+                        Text("Aucun projet")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(filteredProjets) { ProjetRow(projet: $0) }
+                    }
                 }
-            }
-
-            Section("Commandes (\(filteredCommandes.count))") {
-                if filteredCommandes.isEmpty {
-                    Text("Aucune commande")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(filteredCommandes) { CommandeRow(commande: $0) }
+            case .commandes:
+                Section("Commandes (\(filteredCommandes.count))") {
+                    if filteredCommandes.isEmpty {
+                        Text("Aucune commande")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(filteredCommandes) { CommandeRow(commande: $0) }
+                    }
                 }
             }
 
