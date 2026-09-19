@@ -6,7 +6,7 @@ struct DashboardView: View {
 
     var body: some View {
         List {
-            Section("Services") {
+            Section {
                 ForEach(store.services) { service in
                     NavigationLink {
                         ServiceDetailView(service: service)
@@ -14,18 +14,24 @@ struct DashboardView: View {
                         ServiceRow(summary: service)
                     }
                 }
+            } header: {
+                Label("Services", systemImage: "building.2.fill")
             }
 
-            Section("Consolidation") {
+            Section {
                 NavigationLink("Toutes nomenclatures, tous services") {
                     ConsolidatedView()
                 }
+            } header: {
+                Label("Consolidation", systemImage: "chart.pie.fill")
             }
 
-            Section("Commandes") {
+            Section {
                 NavigationLink("Commandes et projets") {
                     CommandesRootView()
                 }
+            } header: {
+                Label("Commandes", systemImage: "cart.fill")
             }
 
             if let lastImportDate = store.lastImportDate {

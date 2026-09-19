@@ -23,6 +23,10 @@ struct ServiceDetailView: View {
         nomenclature.filter { $0.section == .autre }
     }
 
+    private func totals(_ items: [NomenclatureSummary]) -> (voté: Double, engagé: Double) {
+        (items.reduce(0) { $0 + $1.voté }, items.reduce(0) { $0 + $1.engagé })
+    }
+
     var body: some View {
         List {
             Section {
@@ -42,6 +46,18 @@ struct ServiceDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                     .font(.caption)
+
+                    if !fonctionnement.isEmpty || !investissement.isEmpty {
+                        Divider()
+                        VStack(alignment: .leading, spacing: 6) {
+                            if !fonctionnement.isEmpty {
+                                sectionBreakdown(label: "Fonctionnement", totals: totals(fonctionnement))
+                            }
+                            if !investissement.isEmpty {
+                                sectionBreakdown(label: "Investissement", totals: totals(investissement))
+                            }
+                        }
+                    }
                 }
                 .padding(.vertical, 4)
             }
@@ -90,6 +106,22 @@ struct ServiceDetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Configure l'app Mail avec un compte pour pouvoir envoyer un email depuis l'app.")
+        }
+    }
+
+    @ViewBuilder
+    private func sectionBreakdown(label: String, totals: (voté: Double, engagé: Double)) -> some View {
+        HStack {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text("Voté \(totals.voté.currencyEUR)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text("· Consommé \(totals.engagé.currencyEUR)")
+                .font(.caption2)
+                .foregroundStyle(totals.engagé > totals.voté ? .red : .secondary)
         }
     }
 
