@@ -1,3 +1,4 @@
+import MessageUI
 import SwiftUI
 
 struct CommandesContentView: View {
@@ -8,6 +9,11 @@ struct CommandesContentView: View {
     @State private var isShowingSeditFilePicker = false
     @State private var selectedServiceCode: Int?
     @State private var selectedTab: Tab = .projets
+
+    @State private var isShowingEmailPrompt = false
+    @State private var isShowingMailComposer = false
+    @State private var isShowingMailUnavailable = false
+    @State private var recipientEmail = ""
 
     private enum Tab: String, CaseIterable {
         case projets = "Projets"
@@ -48,6 +54,13 @@ struct CommandesContentView: View {
         }
         guard let selectedServiceCode else { return items }
         return items.filter { $0.serviceCode == selectedServiceCode }
+    }
+
+    private var scopeLabel: String {
+        selectedServiceCode.map { store.serviceDisplayName($0) } ?? "Tous les services"
+    }
+    private var ecartsEmailKey: String {
+        "ecarts.\(selectedServiceCode.map(String.init) ?? "all")"
     }
 
     var body: some View {
@@ -175,6 +188,15 @@ struct CommandesContentView: View {
             await seditStore.refreshFromSavedBookmark()
         }
         .toolbar {
+            if selectedTab == .ecarts && !seditStore.commandes.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        startEmailFlow()
+                    } label: {
+                        Label("Envoyer par email", systemImage: "envelope")
+                    }
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     isShowingFilePicker = true
@@ -215,5 +237,38 @@ struct CommandesContentView: View {
         } message: {
             Text(seditStore.errorMessage ?? "")
         }
+        .sheet(isPresented: $isShowingEmailPrompt) {
+            EmailRecipientPromptView(email: $recipientEmail) {
+                EmailRecipientStore.save(recipientEmail, forKey: ecartsEmailKey)
+                isShowingEmailPrompt = false
+                isShowingMailComposer = true
+            }
+        }
+        .sheet(isPresented: $isShowingMailComposer) {
+            MailComposeView(
+                recipient: recipientEmail,
+                subject: BCEcartsEmailContent.subject(scopeLabel: scopeLabel),
+                htmlBody: BCEcartsEmailContent.htmlBody(
+                    scopeLabel: scopeLabel,
+                    missingFromExpression: missingFromExpression,
+                    missingFromSedit: missingFromSedit,
+                    crossServiceOrders: crossServiceOrders
+                )
+            )
+        }
+        .alert("Mail non configuré", isPresented: $isShowingMailUnavailable) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Configure l'app Mail avec un compte pour pouvoir envoyer un email depuis l'app.")
+        }
+    }
+
+    private func startEmailFlow() {
+        guard MFMailComposeViewController.canSendMail() else {
+            isShowingMailUnavailable = true
+            return
+        }
+        recipientEmail = EmailRecipientStore.recipient(forKey: ecartsEmailKey) ?? ""
+        isShowingEmailPrompt = true
     }
 }
