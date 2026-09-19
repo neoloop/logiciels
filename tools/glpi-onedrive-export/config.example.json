@@ -1,0 +1,18 @@
+{
+  "GlpiUrl": "https://glpi.exemple.com",
+  "AppToken": "",
+  "UserToken": "",
+  "IncludeClosed": false,
+  "OneDriveExportFolder": "C:\\Users\\ServiceExport\\OneDrive\\GLPI-Export",
+  "LogFile": "C:\\GLPI-Export\\export.log",
+  "Technicians": [
+    { "Id": 5, "Slug": "jdupont" },
+    { "Id": 8, "Slug": "mdurand" }
+  ],
+  "Fields": {
+    "Id": "2",
+    "Title": "1",
+    "Status": "12",
+    "AssignedTechnician": "5"
+  }
+}

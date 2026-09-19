@@ -1,0 +1,58 @@
+name: GLPIInterventions
+options:
+  bundleIdPrefix: com.neoloop
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.9"
+
+targets:
+  GLPIInterventions:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: GLPIInterventions
+    info:
+      path: GLPIInterventions/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: GLPI Interventions
+        UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.neoloop.glpiinterventions
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+    scheme:
+      testTargets:
+        - GLPIInterventionsTests
+
+  GLPIInterventionsTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: GLPIInterventionsTests
+    dependencies:
+      - target: GLPIInterventions
+
+schemes:
+  GLPIInterventions:
+    build:
+      targets:
+        GLPIInterventions: all
+        GLPIInterventionsTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - GLPIInterventionsTests
+    archive:
+      config: Release
