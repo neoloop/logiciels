@@ -22,6 +22,8 @@ struct NomenclatureRow: View {
                     .foregroundStyle(summary.engagé > summary.voté ? .red : .primary)
                 Spacer()
                 Text("Dispo \(summary.disponible.currencyEUR)")
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.green)
             }
             .font(.caption)
             .foregroundStyle(.secondary)
