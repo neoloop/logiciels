@@ -8,6 +8,8 @@ import Foundation
 ///   - "Date de la commande" → date (optional)
 ///   - "Service gestionnaire"→ service whose budget pays for the order (optional)
 ///   - "Service Destinataire"→ service that actually requested/receives it (optional)
+///   - "Service émetteur"    → service that issued the order (optional)
+///   - "Service de facturation" → service that gets invoiced (optional)
 ///   - "Fournisseur"         → supplier (optional)
 ///   - "Libellé"             → description
 ///   - "Montant TTC"         → total amount
@@ -18,6 +20,8 @@ enum SeditImportService {
     private static let dateHeaders = ["date de la commande"]
     private static let serviceHeaders = ["service gestionnaire"]
     private static let destinataireHeaders = ["service destinataire"]
+    private static let emetteurHeaders = ["service emetteur"]
+    private static let facturationHeaders = ["service de facturation"]
     private static let fournisseurHeaders = ["fournisseur"]
     private static let libelleHeaders = ["libelle"]
     private static let montantHeaders = ["montant ttc"]
@@ -53,6 +57,8 @@ enum SeditImportService {
         let dateColumn = ExcelSheetParsing.firstMatch(dateHeaders, in: columns)
         let serviceColumn = ExcelSheetParsing.firstMatch(serviceHeaders, in: columns)
         let destinataireColumn = ExcelSheetParsing.firstMatch(destinataireHeaders, in: columns)
+        let emetteurColumn = ExcelSheetParsing.firstMatch(emetteurHeaders, in: columns)
+        let facturationColumn = ExcelSheetParsing.firstMatch(facturationHeaders, in: columns)
         let fournisseurColumn = ExcelSheetParsing.firstMatch(fournisseurHeaders, in: columns)
         let montantColumn = ExcelSheetParsing.firstMatch(montantHeaders, in: columns)
         let articleColumn = ExcelSheetParsing.firstMatch(articleHeaders, in: columns)
@@ -68,6 +74,8 @@ enum SeditImportService {
             let date = dateColumn.flatMap { cells[$0] }.flatMap(ParsingUtils.parseDate)
             let serviceCode = serviceColumn.flatMap { cells[$0] }.flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
             let serviceDestinataire = destinataireColumn.flatMap { cells[$0] }.flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            let serviceEmetteur = emetteurColumn.flatMap { cells[$0] }.flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            let serviceFacturation = facturationColumn.flatMap { cells[$0] }.flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
             let fournisseur = fournisseurColumn.flatMap { cells[$0] }?.trimmingCharacters(in: .whitespacesAndNewlines)
             let montant = montantColumn.flatMap { cells[$0] }.flatMap(ParsingUtils.parseAmount) ?? 0
             let article = articleColumn.flatMap { cells[$0] }?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -78,6 +86,8 @@ enum SeditImportService {
                     date: date,
                     serviceCode: serviceCode,
                     serviceDestinataire: serviceDestinataire,
+                    serviceEmetteur: serviceEmetteur,
+                    serviceFacturation: serviceFacturation,
                     fournisseur: (fournisseur?.isEmpty ?? true) ? nil : fournisseur,
                     libelle: libelle.isEmpty ? numero : libelle,
                     montantTTC: montant,

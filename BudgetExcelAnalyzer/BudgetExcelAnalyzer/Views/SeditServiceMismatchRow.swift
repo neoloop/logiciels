@@ -1,11 +1,16 @@
 import SwiftUI
 
-/// A Sedit order line where the "Service Gestionnaire" (who pays) and "Service
-/// Destinataire" (who actually ordered/receives it) differ.
-struct CrossServiceOrderRow: View {
+/// A Sedit order line where two of its service fields disagree (e.g. "Service
+/// Gestionnaire" vs "Service Destinataire", or "Service émetteur" vs "Service de
+/// facturation"). Generic so both mismatch types share one row.
+struct SeditServiceMismatchRow: View {
     let order: SeditCommandeLine
+    let fromCode: Int?
+    let fromLabel: String
+    let toCode: Int?
+    let toLabel: String
 
-    private func label(_ code: Int?) -> String {
+    private func serviceName(_ code: Int?) -> String {
         guard let code else { return "—" }
         return ServiceDisplayOverrides.displayName(forServiceCode: code, fallback: "Service \(code)")
     }
@@ -20,9 +25,9 @@ struct CrossServiceOrderRow: View {
                 Text(order.montantTTC.currencyEUR)
             }
             HStack(spacing: 4) {
-                Text("Budget \(label(order.serviceCode))")
+                Text("\(fromLabel) \(serviceName(fromCode))")
                 Image(systemName: "arrow.right")
-                Text("Commandé par \(label(order.serviceDestinataire))")
+                Text("\(toLabel) \(serviceName(toCode))")
                     .fontWeight(.semibold)
                     .foregroundStyle(.orange)
             }

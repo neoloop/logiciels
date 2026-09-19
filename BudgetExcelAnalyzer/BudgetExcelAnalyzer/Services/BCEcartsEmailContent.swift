@@ -14,7 +14,8 @@ enum BCEcartsEmailContent {
         scopeLabel: String,
         missingFromExpression: [BCDiscrepancy],
         missingFromSedit: [BCDiscrepancy],
-        crossServiceOrders: [SeditCommandeLine]
+        crossServiceOrders: [SeditCommandeLine],
+        emetteurFacturationMismatches: [SeditCommandeLine]
     ) -> String {
         """
         <html>
@@ -40,6 +41,18 @@ enum BCEcartsEmailContent {
                     libelle: $0.libelle,
                     montant: $0.montantTTC,
                     service: "\(serviceLabel($0.serviceCode)) → \(serviceLabel($0.serviceDestinataire))"
+                )
+            }
+          ))
+
+          \(table(
+            title: "Émetteur ≠ Facturation",
+            rows: emetteurFacturationMismatches.map {
+                row(
+                    bc: $0.numeroCommande,
+                    libelle: $0.libelle,
+                    montant: $0.montantTTC,
+                    service: "\(serviceLabel($0.serviceEmetteur)) → \(serviceLabel($0.serviceFacturation))"
                 )
             }
           ))

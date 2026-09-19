@@ -56,13 +56,27 @@ struct CommandesContentView: View {
         return items.filter { $0.serviceCode == selectedServiceCode }
     }
 
+    /// Sedit lines where the issuing service ("Service émetteur") differs from the
+    /// billed service ("Service de facturation"). When a service is selected, restricted
+    /// to lines involving it in either role.
+    private var emetteurFacturationMismatches: [SeditCommandeLine] {
+        let items = seditStore.commandes.filter {
+            guard let emetteur = $0.serviceEmetteur, let facturation = $0.serviceFacturation else { return false }
+            return emetteur != facturation
+        }
+        guard let selectedServiceCode else { return items }
+        return items.filter { $0.serviceEmetteur == selectedServiceCode || $0.serviceFacturation == selectedServiceCode }
+    }
+
     /// Union of every service code seen anywhere: Expression/PPI (store.serviceCodes) plus
-    /// whatever "Service Gestionnaire"/"Service Destinataire" values show up in Sedit, even
-    /// if they're services that never appear in Expression itself.
+    /// whatever service fields show up in Sedit, even if they're services that never
+    /// appear in Expression itself.
     private var allServiceCodes: [Int] {
         var codes = Set(store.serviceCodes)
         codes.formUnion(seditStore.commandes.compactMap(\.serviceCode))
         codes.formUnion(seditStore.commandes.compactMap(\.serviceDestinataire))
+        codes.formUnion(seditStore.commandes.compactMap(\.serviceEmetteur))
+        codes.formUnion(seditStore.commandes.compactMap(\.serviceFacturation))
         return codes.sorted { ServiceDisplayOverrides.sortRank(forServiceCode: $0) < ServiceDisplayOverrides.sortRank(forServiceCode: $1) }
     }
 
@@ -157,7 +171,19 @@ struct CommandesContentView: View {
                             Text("Aucune commande inter-services")
                                 .foregroundStyle(.secondary)
                         } else {
-                            ForEach(crossServiceOrders) { CrossServiceOrderRow(order: $0) }
+                            ForEach(crossServiceOrders) {
+                                SeditServiceMismatchRow(order: $0, fromCode: $0.serviceCode, fromLabel: "Budget", toCode: $0.serviceDestinataire, toLabel: "Commandé par")
+                            }
+                        }
+                    }
+                    Section("Émetteur ≠ Facturation (\(emetteurFacturationMismatches.count))") {
+                        if emetteurFacturationMismatches.isEmpty {
+                            Text("Aucun écart émetteur/facturation")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(emetteurFacturationMismatches) {
+                                SeditServiceMismatchRow(order: $0, fromCode: $0.serviceEmetteur, fromLabel: "Émis par", toCode: $0.serviceFacturation, toLabel: "Facturé à")
+                            }
                         }
                     }
                     Section {
@@ -262,7 +288,8 @@ struct CommandesContentView: View {
                     scopeLabel: scopeLabel,
                     missingFromExpression: missingFromExpression,
                     missingFromSedit: missingFromSedit,
-                    crossServiceOrders: crossServiceOrders
+                    crossServiceOrders: crossServiceOrders,
+                    emetteurFacturationMismatches: emetteurFacturationMismatches
                 )
             )
         }
