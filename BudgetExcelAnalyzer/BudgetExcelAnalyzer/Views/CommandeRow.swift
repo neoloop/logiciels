@@ -23,6 +23,10 @@ struct CommandeRow: View {
                 if !commande.numero.isEmpty {
                     Text("N° \(commande.numero)")
                 }
+                if let bc = commande.bc, !bc.isEmpty {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
