@@ -23,6 +23,8 @@ struct ProjetRow: View {
                     .foregroundStyle(projet.isOverBudget ? .red : .primary)
                 Spacer()
                 Text("Reste \(projet.reste.currencyEUR)")
+                    .fontWeight(.bold)
+                    .foregroundStyle(projet.reste < 0 ? .red : .green)
             }
             .font(.caption)
             .foregroundStyle(.secondary)
