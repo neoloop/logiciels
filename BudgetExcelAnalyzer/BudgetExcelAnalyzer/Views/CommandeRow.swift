@@ -13,6 +13,10 @@ struct CommandeRow: View {
                 Text(commande.montant.currencyEUR)
             }
             HStack(spacing: 4) {
+                if let articleCode = commande.articleCode, !articleCode.isEmpty {
+                    Text(articleCode)
+                        .font(.caption.monospaced())
+                }
                 if let date = commande.date {
                     Text(date, format: .dateTime.day().month().year())
                 }
