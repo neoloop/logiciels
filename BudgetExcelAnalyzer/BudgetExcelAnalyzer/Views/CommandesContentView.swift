@@ -37,6 +37,19 @@ struct CommandesContentView: View {
         filteredByService(BCReconciliation.inExpressionNotSedit(expression: store.commandes(forService: nil), sedit: seditStore.commandes))
     }
 
+    /// Sedit lines where the paying service ("Service Gestionnaire") differs from the
+    /// ordering service ("Service Destinataire") — i.e. another service ordered against
+    /// this budget. When a service is selected, restricted to orders charged to *its*
+    /// budget (so you see who ordered on you, not the other direction).
+    private var crossServiceOrders: [SeditCommandeLine] {
+        let items = seditStore.commandes.filter {
+            guard let gestionnaire = $0.serviceCode, let destinataire = $0.serviceDestinataire else { return false }
+            return gestionnaire != destinataire
+        }
+        guard let selectedServiceCode else { return items }
+        return items.filter { $0.serviceCode == selectedServiceCode }
+    }
+
     var body: some View {
         List {
             Section {
@@ -114,6 +127,14 @@ struct CommandesContentView: View {
                                 .foregroundStyle(.secondary)
                         } else {
                             ForEach(missingFromSedit) { BCDiscrepancyRow(discrepancy: $0) }
+                        }
+                    }
+                    Section("Commandé par un autre service (\(crossServiceOrders.count))") {
+                        if crossServiceOrders.isEmpty {
+                            Text("Aucune commande inter-services")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(crossServiceOrders) { CrossServiceOrderRow(order: $0) }
                         }
                     }
                     Section {
