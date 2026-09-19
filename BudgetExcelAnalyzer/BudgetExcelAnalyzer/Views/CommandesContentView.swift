@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CommandesContentView: View {
     @EnvironmentObject private var store: CommandesDataStore
+    @EnvironmentObject private var budgetStore: BudgetDataStore
     @Binding var isShowingFilePicker: Bool
     @State private var selectedServiceCode: Int?
     @State private var selectedTab: Tab = .projets
@@ -13,6 +14,13 @@ struct CommandesContentView: View {
 
     private var filteredCommandes: [CommandeLine] { store.commandes(forService: selectedServiceCode) }
     private var filteredProjets: [ProjetLine] { store.projets(forService: selectedServiceCode) }
+
+    /// Voté/Dispo per nomenclature for Investissement, cross-referenced from the main budget
+    /// file (Situation Budgétaire) and filtered to the same selected service as the projects.
+    private var investissementNomenclature: [NomenclatureSummary] {
+        let items = selectedServiceCode.map { budgetStore.nomenclature(forService: $0) } ?? budgetStore.consolidatedNomenclature
+        return items.filter { $0.section == .investissement }
+    }
 
     var body: some View {
         List {
@@ -43,6 +51,11 @@ struct CommandesContentView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(filteredProjets) { ProjetRow(projet: $0) }
+                    }
+                }
+                if !investissementNomenclature.isEmpty {
+                    Section("Budget Investissement — Voté / Dispo") {
+                        ForEach(investissementNomenclature) { NomenclatureRow(summary: $0) }
                     }
                 }
             case .commandes:
