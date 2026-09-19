@@ -21,19 +21,21 @@ final class BudgetDataStore: ObservableObject {
         loadSnapshot()
     }
 
-    /// Services present in the imported file, detected automatically (not hardcoded),
-    /// sorted by code.
+    /// Services present in the imported file, detected automatically (not hardcoded).
+    /// Display name and order can be overridden per code (see ServiceDisplayOverrides)
+    /// without changing the underlying imported data.
     var services: [ServiceSummary] {
         let grouped = Dictionary(grouping: lineItems, by: \.serviceCode)
         return grouped.map { code, items in
-            ServiceSummary(
+            let fallbackLabel = items.first?.serviceLabel ?? "Service \(code)"
+            return ServiceSummary(
                 serviceCode: code,
-                serviceLabel: items.first?.serviceLabel ?? "Service \(code)",
+                serviceLabel: ServiceDisplayOverrides.displayName(forServiceCode: code, fallback: fallbackLabel),
                 voté: items.reduce(0) { $0 + $1.voté },
                 engagé: items.reduce(0) { $0 + $1.engagé },
                 disponible: items.reduce(0) { $0 + $1.disponible }
             )
-        }.sorted { $0.serviceCode < $1.serviceCode }
+        }.sorted { ServiceDisplayOverrides.sortRank(forServiceCode: $0.serviceCode) < ServiceDisplayOverrides.sortRank(forServiceCode: $1.serviceCode) }
     }
 
     func nomenclature(forService serviceCode: Int) -> [NomenclatureSummary] {
