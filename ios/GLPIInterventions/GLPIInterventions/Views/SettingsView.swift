@@ -14,67 +14,74 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("Compte") {
-                    if let name = auth.currentUserName {
-                        LabeledContent("Connecté en tant que", value: name)
+                    LabeledContent("Mode de connexion", value: auth.connectionMode.label)
+                    if auth.connectionMode == .direct {
+                        if let name = auth.currentUserName {
+                            LabeledContent("Connecté en tant que", value: name)
+                        }
+                        LabeledContent("Serveur", value: auth.serverURLText)
+                    } else {
+                        LabeledContent("Fichier d'export", value: auth.exportFileURLText)
                     }
-                    LabeledContent("Serveur", value: auth.serverURLText)
-                    Button("Se déconnecter", role: .destructive) {
+                    Button("Se déconnecter / changer de mode", role: .destructive) {
                         Task { await auth.logout() }
                     }
                 }
 
-                Section {
-                    Toggle("Notifications push", isOn: Binding(
-                        get: { pushManager.isEnabled },
-                        set: { enabled in
-                            Task {
-                                if enabled {
-                                    await pushManager.enable(glpiUserId: auth.currentUserId)
-                                } else {
-                                    pushManager.disable()
+                if auth.connectionMode == .direct {
+                    Section {
+                        Toggle("Notifications push", isOn: Binding(
+                            get: { pushManager.isEnabled },
+                            set: { enabled in
+                                Task {
+                                    if enabled {
+                                        await pushManager.enable(glpiUserId: auth.currentUserId)
+                                    } else {
+                                        pushManager.disable()
+                                    }
                                 }
                             }
-                        }
-                    ))
-                } header: {
-                    Text("Notifications")
-                } footer: {
-                    Text("GLPI ne pousse pas de notifications nativement : ce réglage envoie le jeton de cet appareil à un petit relais auto-hébergé (dossier backend/glpi-push-relay) qui interroge GLPI et déclenche les notifications APNs.")
-                }
-
-                Section("Relais de notifications") {
-                    TextField("https://relais.exemple.com", text: $relayURLText)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .onChange(of: relayURLText) { _, newValue in
-                            UserDefaults.standard.set(newValue, forKey: "relay.baseURL")
-                        }
-                    SecureField("Clé API du relais", text: $relayAPIKey)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .onChange(of: relayAPIKey) { _, newValue in
-                            UserDefaults.standard.set(newValue, forKey: "relay.apiKey")
-                        }
-                }
-
-                Section {
-                    fieldRow("Champ ID", $mapping.idField)
-                    fieldRow("Champ Titre", $mapping.titleField)
-                    fieldRow("Champ Statut", $mapping.statusField)
-                    fieldRow("Champ Priorité", $mapping.priorityField)
-                    fieldRow("Champ Date création", $mapping.dateField)
-                    fieldRow("Champ Date modification", $mapping.dateModField)
-                    fieldRow("Champ Technicien assigné", $mapping.assignedTechnicianField)
-
-                    Button("Enregistrer le mapping des champs") {
-                        mapping.saveToDefaults()
-                        savedMappingConfirmation = true
+                        ))
+                    } header: {
+                        Text("Notifications")
+                    } footer: {
+                        Text("GLPI ne pousse pas de notifications nativement : ce réglage envoie le jeton de cet appareil à un petit relais auto-hébergé (dossier backend/glpi-push-relay) qui interroge GLPI et déclenche les notifications APNs. Indisponible en mode fichier partagé.")
                     }
-                } header: {
-                    Text("Mapping des champs GLPI (avancé)")
-                } footer: {
-                    Text("Ce sont les identifiants d'options de recherche GLPI (visibles dans l'URL quand vous ajoutez une colonne dans la recherche de tickets sur le site web). Les valeurs par défaut correspondent à une installation standard ; ajustez-les si votre instance a été personnalisée.")
+
+                    Section("Relais de notifications") {
+                        TextField("https://relais.exemple.com", text: $relayURLText)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .onChange(of: relayURLText) { _, newValue in
+                                UserDefaults.standard.set(newValue, forKey: "relay.baseURL")
+                            }
+                        SecureField("Clé API du relais", text: $relayAPIKey)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .onChange(of: relayAPIKey) { _, newValue in
+                                UserDefaults.standard.set(newValue, forKey: "relay.apiKey")
+                            }
+                    }
+
+                    Section {
+                        fieldRow("Champ ID", $mapping.idField)
+                        fieldRow("Champ Titre", $mapping.titleField)
+                        fieldRow("Champ Statut", $mapping.statusField)
+                        fieldRow("Champ Priorité", $mapping.priorityField)
+                        fieldRow("Champ Date création", $mapping.dateField)
+                        fieldRow("Champ Date modification", $mapping.dateModField)
+                        fieldRow("Champ Technicien assigné", $mapping.assignedTechnicianField)
+
+                        Button("Enregistrer le mapping des champs") {
+                            mapping.saveToDefaults()
+                            savedMappingConfirmation = true
+                        }
+                    } header: {
+                        Text("Mapping des champs GLPI (avancé)")
+                    } footer: {
+                        Text("Ce sont les identifiants d'options de recherche GLPI (visibles dans l'URL quand vous ajoutez une colonne dans la recherche de tickets sur le site web). Les valeurs par défaut correspondent à une installation standard ; ajustez-les si votre instance a été personnalisée. Un changement ici s'applique à la prochaine connexion.")
+                    }
                 }
             }
             .navigationTitle("Réglages")

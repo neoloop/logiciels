@@ -56,24 +56,48 @@ Capabilities ▸ choisissez votre équipe de développement.
 Lancez ensuite sur simulateur ou appareil avec ⌘R, ou exécutez les tests
 unitaires avec ⌘U (voir `GLPIInterventionsTests/`).
 
-## Utilisation dans l'app
+## Deux modes de connexion
 
-Au premier lancement, l'écran de connexion demande :
+L'écran de connexion propose un choix en haut :
+
+### Mode Direct (VPN / réseau GLPI)
+
+Celui à utiliser quand le téléphone peut effectivement joindre le serveur
+GLPI (sur place, ou via VPN d'entreprise). Fonctionnalité complète :
+liste, détail, changement de statut, ajout de suivi, en temps réel.
 
 - **Serveur** : l'URL de base de votre GLPI (ex. `https://glpi.exemple.com`)
-- **App-Token** et **User-Token** obtenus ci-dessus
+- **App-Token** et **User-Token** (voir "Configuration côté GLPI" ci-dessus)
 
-Une fois connecté, l'onglet **Interventions** liste les tickets assignés au
-technicien connecté (triés par dernière modification), avec un filtre par
-statut et l'option d'inclure les tickets clos. Le détail d'un ticket permet
-de changer son statut et d'ajouter un suivi.
+### Mode Fichier partagé (OneDrive)
+
+Pour quand GLPI n'est accessible que depuis le réseau interne et qu'il n'y
+a pas de VPN disponible : l'app lit un export JSON généré toutes les
+heures par un script tournant sur une machine du réseau, synchronisé via
+OneDrive — voir [`tools/glpi-onedrive-export`](../../tools/glpi-onedrive-export)
+pour le script et son README (configuration, planification, partage du
+fichier).
+
+- **Fichier d'export** : l'URL de téléchargement direct du fichier
+  `tickets_<vous>.json` partagé sur OneDrive.
+- **Lecture seule** : pas de changement de statut ni d'ajout de suivi
+  possible dans ce mode (bandeau et messages d'erreur explicites dans
+  l'app) — il faut repasser en mode Direct pour agir sur un ticket.
+- Les données affichées datent de la dernière exécution du script
+  (jusqu'à ~1h de retard) ; l'heure de dernière synchro est affichée en
+  haut de la liste.
+
+Dans les deux cas, une fois connecté, l'onglet **Interventions** liste les
+tickets assignés (triés par dernière modification), avec un filtre par
+statut et l'option d'inclure les tickets clos.
 
 L'onglet **Réglages** permet de :
-- se déconnecter ;
-- activer les notifications push (voir ci-dessous) ;
+- voir le mode actif et se déconnecter / changer de mode ;
+- activer les notifications push (mode Direct uniquement, voir ci-dessous) ;
 - ajuster le **mapping des champs de recherche GLPI** si votre instance a
-  été personnalisée (les identifiants de champ par défaut correspondent à
-  une installation standard, voir `Models/GLPIFieldMapping.swift`).
+  été personnalisée (mode Direct uniquement — les identifiants de champ
+  par défaut correspondent à une installation standard, voir
+  `Models/GLPIFieldMapping.swift`).
 
 ## Notifications push
 
@@ -89,9 +113,12 @@ bouton "Notifications push" n'aura aucun effet observable.
 ```
 GLPIInterventions/
   App/            point d'entrée SwiftUI + AppDelegate (APNs)
-  Models/         Ticket, statuts/priorités, mapping de champs GLPI
-  Networking/     client API GLPI, Keychain, service push
-  ViewModels/     logique métier (auth, liste, détail)
+  Models/         Ticket, statuts/priorités, mapping de champs GLPI,
+                  schéma du fichier d'export (TicketExport.swift)
+  Networking/     TicketsRepository (protocole) + GLPIRepository (direct)
+                  et FileExportRepository (fichier), client API GLPI,
+                  Keychain, service push
+  ViewModels/     logique métier (auth/mode de connexion, liste, détail)
   Views/          écrans SwiftUI
   Utilities/      conversion HTML → texte
   Resources/      Info.plist, Assets.xcassets

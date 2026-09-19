@@ -3,8 +3,8 @@ import SwiftUI
 struct TicketDetailView: View {
     @StateObject private var viewModel: TicketDetailViewModel
 
-    init(client: GLPIAPIClient, ticketId: Int) {
-        _viewModel = StateObject(wrappedValue: TicketDetailViewModel(ticketId: ticketId, client: client))
+    init(repository: TicketsRepository, ticketId: Int) {
+        _viewModel = StateObject(wrappedValue: TicketDetailViewModel(ticketId: ticketId, repository: repository))
     }
 
     var body: some View {
@@ -35,20 +35,28 @@ struct TicketDetailView: View {
                             .font(.body)
                     }
 
-                    Section("Changer le statut") {
-                        Picker("Statut", selection: Binding(
-                            get: { ticket.status },
-                            set: { newStatus in Task { await viewModel.updateStatus(to: newStatus) } }
-                        )) {
-                            ForEach(TicketStatus.editableCases) { status in
-                                Text(status.label).tag(status)
-                            }
-                            if !TicketStatus.editableCases.contains(ticket.status) {
-                                Text(ticket.status.label).tag(ticket.status)
-                            }
+                    if viewModel.isReadOnly {
+                        Section {
+                            Label("Mode fichier partagé : lecture seule. Passez en mode Direct (VPN) pour changer le statut ou ajouter un suivi.", systemImage: "lock")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        .pickerStyle(.menu)
-                        .disabled(viewModel.isUpdating)
+                    } else {
+                        Section("Changer le statut") {
+                            Picker("Statut", selection: Binding(
+                                get: { ticket.status },
+                                set: { newStatus in Task { await viewModel.updateStatus(to: newStatus) } }
+                            )) {
+                                ForEach(TicketStatus.editableCases) { status in
+                                    Text(status.label).tag(status)
+                                }
+                                if !TicketStatus.editableCases.contains(ticket.status) {
+                                    Text(ticket.status.label).tag(ticket.status)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .disabled(viewModel.isUpdating)
+                        }
                     }
 
                     Section("Suivis (\(viewModel.followups.count))") {
@@ -69,15 +77,17 @@ struct TicketDetailView: View {
                             .padding(.vertical, 2)
                         }
 
-                        HStack(alignment: .bottom) {
-                            TextField("Ajouter un suivi…", text: $viewModel.newFollowupText, axis: .vertical)
-                                .lineLimit(1...4)
-                            Button {
-                                Task { await viewModel.submitFollowup() }
-                            } label: {
-                                Image(systemName: "paperplane.fill")
+                        if !viewModel.isReadOnly {
+                            HStack(alignment: .bottom) {
+                                TextField("Ajouter un suivi…", text: $viewModel.newFollowupText, axis: .vertical)
+                                    .lineLimit(1...4)
+                                Button {
+                                    Task { await viewModel.submitFollowup() }
+                                } label: {
+                                    Image(systemName: "paperplane.fill")
+                                }
+                                .disabled(viewModel.newFollowupText.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isUpdating)
                             }
-                            .disabled(viewModel.newFollowupText.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isUpdating)
                         }
                     }
                 }

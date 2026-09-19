@@ -10,17 +10,43 @@ struct TicketSummary: Identifiable, Equatable {
     let date: Date?
     let dateMod: Date?
 
+    init(id: Int, title: String, status: TicketStatus, priority: TicketPriority?, date: Date?, dateMod: Date?) {
+        self.id = id
+        self.title = title
+        self.status = status
+        self.priority = priority
+        self.date = date
+        self.dateMod = dateMod
+    }
+
     init?(row: [String: JSONValue], mapping: GLPIFieldMapping) {
         guard
             let idValue = row[mapping.idField]?.intValue
         else { return nil }
 
-        self.id = idValue
-        self.title = row[mapping.titleField]?.stringValue ?? "(sans titre)"
-        self.status = row[mapping.statusField]?.intValue.flatMap(TicketStatus.init) ?? .new
-        self.priority = row[mapping.priorityField]?.intValue.flatMap(TicketPriority.init)
-        self.date = row[mapping.dateField]?.stringValue.glpiDate
-        self.dateMod = row[mapping.dateModField]?.stringValue.glpiDate
+        self.init(
+            id: idValue,
+            title: row[mapping.titleField]?.stringValue ?? "(sans titre)",
+            status: row[mapping.statusField]?.intValue.flatMap(TicketStatus.init) ?? .new,
+            priority: row[mapping.priorityField]?.intValue.flatMap(TicketPriority.init),
+            date: row[mapping.dateField]?.stringValue.glpiDate,
+            dateMod: row[mapping.dateModField]?.stringValue.glpiDate
+        )
+    }
+}
+
+extension TicketSummary {
+    /// Builds a row from a fully-fetched `Ticket` (used by `FileExportRepository`,
+    /// which decodes whole ticket objects rather than search rows).
+    init(ticket: Ticket) {
+        self.init(
+            id: ticket.id,
+            title: ticket.name,
+            status: ticket.status,
+            priority: ticket.priority,
+            date: ticket.date,
+            dateMod: ticket.dateMod
+        )
     }
 }
 

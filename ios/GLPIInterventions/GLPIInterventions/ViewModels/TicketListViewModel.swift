@@ -7,24 +7,19 @@ final class TicketListViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var includeClosed: Bool = false
     @Published var statusFilter: TicketStatus?
+    @Published private(set) var lastSyncedAt: Date?
 
-    private let client: GLPIAPIClient
-    private let currentUserId: Int
-    private var mapping: GLPIFieldMapping
+    let isReadOnly: Bool
+    private let repository: TicketsRepository
 
     var filteredTickets: [TicketSummary] {
         guard let statusFilter else { return tickets }
         return tickets.filter { $0.status == statusFilter }
     }
 
-    init(client: GLPIAPIClient, currentUserId: Int, mapping: GLPIFieldMapping = .loadFromDefaults()) {
-        self.client = client
-        self.currentUserId = currentUserId
-        self.mapping = mapping
-    }
-
-    func refreshMapping() {
-        mapping = GLPIFieldMapping.loadFromDefaults()
+    init(repository: TicketsRepository) {
+        self.repository = repository
+        self.isReadOnly = repository.isReadOnly
     }
 
     func load() async {
@@ -32,12 +27,8 @@ final class TicketListViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            let result = try await client.searchTickets(
-                assignedToUserId: currentUserId,
-                includeClosed: includeClosed,
-                mapping: mapping
-            )
-            tickets = result.rows
+            tickets = try await repository.fetchTicketSummaries(includeClosed: includeClosed)
+            lastSyncedAt = repository.lastSyncedAt
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }

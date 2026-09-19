@@ -1,11 +1,12 @@
 import SwiftUI
 
 struct TicketListView: View {
-    @EnvironmentObject private var auth: AuthViewModel
     @StateObject private var viewModel: TicketListViewModel
+    private let repository: TicketsRepository
 
-    init(client: GLPIAPIClient, currentUserId: Int) {
-        _viewModel = StateObject(wrappedValue: TicketListViewModel(client: client, currentUserId: currentUserId))
+    init(repository: TicketsRepository) {
+        self.repository = repository
+        _viewModel = StateObject(wrappedValue: TicketListViewModel(repository: repository))
     }
 
     var body: some View {
@@ -28,9 +29,14 @@ struct TicketListView: View {
                     .listStyle(.plain)
                 }
             }
+            .safeAreaInset(edge: .top) {
+                if viewModel.isReadOnly {
+                    ReadOnlyBanner(lastSyncedAt: viewModel.lastSyncedAt)
+                }
+            }
             .navigationTitle("Mes interventions")
             .navigationDestination(for: Int.self) { ticketId in
-                TicketDetailView(client: auth.client!, ticketId: ticketId)
+                TicketDetailView(repository: repository, ticketId: ticketId)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -64,6 +70,28 @@ struct TicketListView: View {
                 Text(viewModel.errorMessage ?? "")
             }
         }
+    }
+}
+
+private struct ReadOnlyBanner: View {
+    let lastSyncedAt: Date?
+
+    var body: some View {
+        HStack {
+            Image(systemName: "doc.text.magnifyingglass")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Mode fichier partagé — lecture seule")
+                    .font(.caption).fontWeight(.semibold)
+                if let lastSyncedAt {
+                    Text("Dernière synchro : \(lastSyncedAt.formatted(date: .omitted, time: .shortened))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+        }
+        .padding(8)
+        .background(Color.yellow.opacity(0.15))
     }
 }
 

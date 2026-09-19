@@ -10,11 +10,13 @@ final class TicketDetailViewModel: ObservableObject {
     @Published var newFollowupText: String = ""
 
     let ticketId: Int
-    private let client: GLPIAPIClient
+    let isReadOnly: Bool
+    private let repository: TicketsRepository
 
-    init(ticketId: Int, client: GLPIAPIClient) {
+    init(ticketId: Int, repository: TicketsRepository) {
         self.ticketId = ticketId
-        self.client = client
+        self.repository = repository
+        self.isReadOnly = repository.isReadOnly
     }
 
     func load() async {
@@ -22,8 +24,8 @@ final class TicketDetailViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            async let ticketFetch = client.getTicket(id: ticketId)
-            async let followupsFetch = client.getFollowups(ticketId: ticketId)
+            async let ticketFetch = repository.fetchTicket(id: ticketId)
+            async let followupsFetch = repository.fetchFollowups(ticketId: ticketId)
             ticket = try await ticketFetch
             followups = try await followupsFetch
         } catch {
@@ -33,10 +35,14 @@ final class TicketDetailViewModel: ObservableObject {
 
     func updateStatus(to status: TicketStatus) async {
         guard ticket != nil else { return }
+        guard !isReadOnly else {
+            errorMessage = RepositoryError.readOnly.errorDescription
+            return
+        }
         isUpdating = true
         defer { isUpdating = false }
         do {
-            try await client.updateTicketStatus(id: ticketId, status: status)
+            try await repository.updateTicketStatus(id: ticketId, status: status)
             await load()
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -44,12 +50,16 @@ final class TicketDetailViewModel: ObservableObject {
     }
 
     func submitFollowup() async {
+        guard !isReadOnly else {
+            errorMessage = RepositoryError.readOnly.errorDescription
+            return
+        }
         let text = newFollowupText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         isUpdating = true
         defer { isUpdating = false }
         do {
-            try await client.addFollowup(ticketId: ticketId, content: text)
+            try await repository.addFollowup(ticketId: ticketId, content: text)
             newFollowupText = ""
             await load()
         } catch {

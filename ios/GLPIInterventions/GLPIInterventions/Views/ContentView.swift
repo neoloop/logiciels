@@ -5,9 +5,9 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if auth.isAuthenticated, let client = auth.client, let userId = auth.currentUserId {
+            if auth.isAuthenticated, let repository = auth.repository {
                 TabView {
-                    TicketListView(client: client, currentUserId: userId)
+                    TicketListView(repository: repository)
                         .tabItem { Label("Interventions", systemImage: "wrench.and.screwdriver") }
 
                     SettingsView()
