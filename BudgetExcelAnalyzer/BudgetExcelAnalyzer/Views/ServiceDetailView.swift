@@ -23,8 +23,8 @@ struct ServiceDetailView: View {
         nomenclature.filter { $0.section == .autre }
     }
 
-    private func totals(_ items: [NomenclatureSummary]) -> (voté: Double, engagé: Double) {
-        (items.reduce(0) { $0 + $1.voté }, items.reduce(0) { $0 + $1.engagé })
+    private func totals(_ items: [NomenclatureSummary]) -> (voté: Double, disponible: Double) {
+        (items.reduce(0) { $0 + $1.voté }, items.reduce(0) { $0 + $1.disponible })
     }
 
     var body: some View {
@@ -110,7 +110,7 @@ struct ServiceDetailView: View {
     }
 
     @ViewBuilder
-    private func sectionBreakdown(label: String, totals: (voté: Double, engagé: Double)) -> some View {
+    private func sectionBreakdown(label: String, totals: (voté: Double, disponible: Double)) -> some View {
         HStack {
             Text(label)
                 .font(.caption.weight(.semibold))
@@ -119,9 +119,10 @@ struct ServiceDetailView: View {
             Text("Voté \(totals.voté.currencyEUR)")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-            Text("· Consommé \(totals.engagé.currencyEUR)")
+            Text("· Dispo \(totals.disponible.currencyEUR)")
                 .font(.caption2)
-                .foregroundStyle(totals.engagé > totals.voté ? .red : .secondary)
+                .fontWeight(.semibold)
+                .foregroundStyle(.green)
         }
     }
 
