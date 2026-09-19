@@ -28,6 +28,9 @@ enum ExcelImportService {
     private static let disponibleHeaders = ["mt disponible"]
 
     static func importWorkbook(at url: URL) throws -> [BudgetLineItem] {
+        if url.pathExtension.lowercased() == "xls" {
+            throw ImportError.legacyXlsFormat
+        }
         guard let file = XLSXFile(filepath: url.path) else {
             throw ImportError.cannotOpenFile
         }

@@ -16,7 +16,7 @@ struct ContentView: View {
             .navigationTitle("Budget")
             .fileImporter(
                 isPresented: $isShowingFilePicker,
-                allowedContentTypes: [.excelWorkbook, .xlsxExtension],
+                allowedContentTypes: [.excelWorkbook, .xlsxExtension, .legacyExcelWorkbook, .xlsExtension],
                 allowsMultipleSelection: false
             ) { result in
                 switch result {
