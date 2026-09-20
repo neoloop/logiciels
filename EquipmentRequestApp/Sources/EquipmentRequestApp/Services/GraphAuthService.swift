@@ -23,8 +23,8 @@ enum GraphAuthError: LocalizedError {
 }
 
 /// Gère la connexion à un compte Microsoft (Azure AD) et l'obtention de jetons
-/// d'accès Microsoft Graph, nécessaires pour lire/écrire le classeur Excel sur
-/// OneDrive/SharePoint depuis l'app.
+/// d'accès Microsoft Graph, nécessaires pour lire/écrire le fichier JSON des
+/// demandes sur OneDrive/SharePoint depuis l'app.
 @MainActor
 final class GraphAuthService: ObservableObject {
     static let shared = GraphAuthService()

@@ -1,19 +1,19 @@
 import SwiftUI
 
-/// Écran principal de l'app : les demandes soumises par les employés via le
-/// formulaire externe (qui alimente le tableau Excel) et pas encore traitées.
+/// Écran principal de l'app : les demandes soumises par les employés (via la
+/// page web ou tout autre moyen alimentant le fichier JSON) et pas encore traitées.
 struct PendingRequestsView: View {
     @EnvironmentObject private var config: AppConfig
     @EnvironmentObject private var authService: GraphAuthService
-    private let excelService = GraphExcelService()
+    private let jsonService = GraphJsonService()
 
-    @State private var columnMap: ColumnMap?
-    @State private var rows: [ExcelEquipmentRequestRow] = []
+    @State private var document = RequestsDocument()
+    @State private var etag: String?
     @State private var isLoading = false
     @State private var errorMessage: String?
 
-    private var pendingRows: [ExcelEquipmentRequestRow] {
-        rows.filter { $0.status == .pending }
+    private var pendingRequests: [JsonEquipmentRequest] {
+        document.requests.filter { $0.requestStatus == .pending }
     }
 
     var body: some View {
@@ -23,16 +23,16 @@ struct PendingRequestsView: View {
                     ProgressView("Chargement…")
                 } else if let errorMessage {
                     ContentUnavailableView("Impossible de charger les demandes", systemImage: "exclamationmark.triangle", description: Text(errorMessage))
-                } else if pendingRows.isEmpty {
+                } else if pendingRequests.isEmpty {
                     ContentUnavailableView("Aucune demande en attente", systemImage: "checkmark.circle")
-                } else if let columnMap {
-                    List(pendingRows) { row in
+                } else {
+                    List(pendingRequests) { item in
                         NavigationLink {
-                            PendingRequestDetailView(row: row, columnMap: columnMap, onHandled: {
+                            PendingRequestDetailView(request: item, document: document, etag: etag, onHandled: {
                                 Task { await load() }
                             })
                         } label: {
-                            PendingRowLabel(row: row)
+                            PendingRowLabel(item: item)
                         }
                     }
                 }
@@ -58,9 +58,9 @@ struct PendingRequestsView: View {
         defer { isLoading = false }
         do {
             let token = try await authService.acquireToken(scopes: config.graphScopes)
-            let result = try await excelService.fetchRequests(accessToken: token, config: config)
-            columnMap = result.columnMap
-            rows = result.rows
+            let result = try await jsonService.fetch(accessToken: token, config: config)
+            document = result.document
+            etag = result.etag
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -68,24 +68,24 @@ struct PendingRequestsView: View {
 }
 
 private struct PendingRowLabel: View {
-    let row: ExcelEquipmentRequestRow
+    let item: JsonEquipmentRequest
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(row.equipmentLabel.isEmpty ? "Matériel non précisé" : row.equipmentLabel)
+                Text(item.equipment.isEmpty ? "Matériel non précisé" : item.equipment)
                     .font(.headline)
                 Spacer()
-                if !row.date.isEmpty {
-                    Text(row.date)
+                if !item.date.isEmpty {
+                    Text(item.date)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }
-            Text("Pour \(row.beneficiaryName) — demandé par \(row.requesterName)")
+            Text("Pour \(item.beneficiaryName) — demandé par \(item.requesterName)")
                 .font(.subheadline)
-            if !row.justification.isEmpty {
-                Text(row.justification)
+            if !item.justification.isEmpty {
+                Text(item.justification)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

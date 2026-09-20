@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Valider les demandes de matériel</title>
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+<div class="page">
+  <header class="app-header">
+    <h1>Demandes de matériel</h1>
+    <p>Consultez, validez ou refusez les demandes en attente.</p>
+  </header>
+
+  <div id="statusMessage" class="status-message" hidden></div>
+
+  <div id="signInCard" class="card" hidden>
+    <h2>Connexion requise</h2>
+    <p>Connectez-vous avec votre compte Microsoft 365 pour accéder aux demandes.</p>
+    <button class="primary" id="signInButton">Se connecter à Microsoft 365</button>
+  </div>
+
+  <div id="appArea" hidden>
+    <div class="card" style="display:flex; gap:8px; align-items:center; justify-content:space-between;">
+      <div>
+        <button class="link" id="tabPendingBtn"><strong>À valider</strong></button>
+        &nbsp;·&nbsp;
+        <button class="link" id="tabHistoryBtn">Historique</button>
+      </div>
+      <button class="link" id="refreshBtn">↻ Rafraîchir</button>
+    </div>
+
+    <!-- Liste des demandes en attente -->
+    <div id="pendingListView" class="card">
+      <h2>À valider</h2>
+      <ul id="pendingList" class="request-list"></ul>
+      <p id="pendingEmpty" class="empty-state" hidden>Aucune demande en attente.</p>
+    </div>
+
+    <!-- Historique -->
+    <div id="historyView" class="card" hidden>
+      <h2>Historique</h2>
+      <ul id="historyList" class="request-list"></ul>
+      <p id="historyEmpty" class="empty-state" hidden>Aucune demande.</p>
+    </div>
+
+    <!-- Détail d'une demande -->
+    <div id="detailView" class="card" hidden>
+      <a href="#" class="back-link" id="backToListLink">‹ Retour à la liste</a>
+      <h2>Détail de la demande</h2>
+
+      <div id="detailFields"></div>
+
+      <label for="detailBeneficiaryEmail">Email du bénéficiaire</label>
+      <input type="email" id="detailBeneficiaryEmail" required />
+      <div class="hint" id="detailEmailHint" hidden>Aucun email enregistré pour cette demande : saisissez-le ici avant de valider.</div>
+
+      <button class="primary" id="validateBtn">Valider la demande</button>
+      <button class="secondary" id="rejectBtn">Refuser la demande</button>
+    </div>
+  </div>
+</div>
+
+<!-- MSAL.js (authentification), jsPDF (génération du PDF) -->
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/auth.js"></script>
+<script src="assets/graphClient.js"></script>
+<script src="assets/pdf.js"></script>
+<script src="assets/mail.js"></script>
+<script>
+  const statusMessage = document.getElementById("statusMessage");
+  const signInCard = document.getElementById("signInCard");
+  const appArea = document.getElementById("appArea");
+  const signInButton = document.getElementById("signInButton");
+  const refreshBtn = document.getElementById("refreshBtn");
+
+  const tabPendingBtn = document.getElementById("tabPendingBtn");
+  const tabHistoryBtn = document.getElementById("tabHistoryBtn");
+  const pendingListView = document.getElementById("pendingListView");
+  const historyView = document.getElementById("historyView");
+  const detailView = document.getElementById("detailView");
+
+  const pendingList = document.getElementById("pendingList");
+  const pendingEmpty = document.getElementById("pendingEmpty");
+  const historyList = document.getElementById("historyList");
+  const historyEmpty = document.getElementById("historyEmpty");
+
+  const detailFields = document.getElementById("detailFields");
+  const detailBeneficiaryEmail = document.getElementById("detailBeneficiaryEmail");
+  const detailEmailHint = document.getElementById("detailEmailHint");
+  const validateBtn = document.getElementById("validateBtn");
+  const rejectBtn = document.getElementById("rejectBtn");
+  const backToListLink = document.getElementById("backToListLink");
+
+  let currentDocument = { schemaVersion: 1, requests: [] };
+  let currentEtag = null;
+  let currentDetailId = null;
+
+  function showMessage(text, kind) {
+    statusMessage.textContent = text;
+    statusMessage.className = `status-message ${kind}`;
+    statusMessage.hidden = false;
+  }
+  function hideMessage() {
+    statusMessage.hidden = true;
+  }
+
+  function statusOf(item) {
+    const known = ["En attente", "En cours", "Traité", "Refusée"];
+    const match = known.find((s) => s.toLowerCase() === (item.status || "").trim().toLowerCase());
+    return match || "En attente";
+  }
+
+  function badgeClass(status) {
+    switch (status) {
+      case "En cours": return "inprogress";
+      case "Traité": return "processed";
+      case "Refusée": return "rejected";
+      default: return "pending";
+    }
+  }
+
+  function renderRow(item, { withBadge }) {
+    const li = document.createElement("li");
+    const status = statusOf(item);
+    li.innerHTML = `
+      <div class="title-row">
+        <strong>${escapeHtml(item.equipment || "Matériel non précisé")}</strong>
+        ${withBadge ? `<span class="badge ${badgeClass(status)}">${escapeHtml(status)}</span>` : `<span>${escapeHtml(item.date || "")}</span>`}
+      </div>
+      <div class="meta">Pour ${escapeHtml(item.beneficiaryName || "—")} — demandé par ${escapeHtml(item.requesterName || "—")}</div>
+    `;
+    li.addEventListener("click", () => openDetail(item.id));
+    return li;
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function renderLists() {
+    const pending = currentDocument.requests.filter((r) => statusOf(r) === "En attente");
+    pendingList.innerHTML = "";
+    pending.forEach((item) => pendingList.appendChild(renderRow(item, { withBadge: false })));
+    pendingEmpty.hidden = pending.length > 0;
+
+    const all = [...currentDocument.requests].reverse();
+    historyList.innerHTML = "";
+    all.forEach((item) => historyList.appendChild(renderRow(item, { withBadge: true })));
+    historyEmpty.hidden = all.length > 0;
+  }
+
+  let lastListTab = "pending";
+
+  function showList(which) {
+    lastListTab = which;
+    detailView.hidden = true;
+    pendingListView.hidden = which !== "pending";
+    historyView.hidden = which !== "history";
+    tabPendingBtn.innerHTML = which === "pending" ? "<strong>À valider</strong>" : "À valider";
+    tabHistoryBtn.innerHTML = which === "history" ? "<strong>Historique</strong>" : "Historique";
+  }
+
+  tabPendingBtn.addEventListener("click", () => showList("pending"));
+  tabHistoryBtn.addEventListener("click", () => showList("history"));
+  backToListLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    showList(lastListTab);
+  });
+
+  function field(label, value) {
+    if (!value) return "";
+    return `<div class="field-row"><span class="field-label">${escapeHtml(label)}</span><span class="field-value">${escapeHtml(value)}</span></div>`;
+  }
+
+  function openDetail(id) {
+    const item = currentDocument.requests.find((r) => r.id === id);
+    if (!item) return;
+    currentDetailId = id;
+    hideMessage();
+
+    detailFields.innerHTML = [
+      field("Demandeur", `${item.requesterName} — ${item.requesterEmail}`),
+      field("Bénéficiaire", item.beneficiaryName),
+      field("Téléphone", item.phone),
+      field("Type de matériel", item.equipment),
+      field("Logiciels", item.software),
+      field("Date de la demande", item.date),
+      field("Référence", item.reference),
+      field("Groupement", item.groupement),
+      field("Opportunité", item.opportunity),
+      field("Observations", item.justification),
+    ].join("");
+
+    detailBeneficiaryEmail.value = item.beneficiaryEmail || "";
+    detailEmailHint.hidden = !!item.beneficiaryEmail;
+
+    pendingListView.hidden = true;
+    historyView.hidden = true;
+    detailView.hidden = false;
+
+    const isPending = statusOf(item) === "En attente";
+    validateBtn.hidden = !isPending;
+    rejectBtn.hidden = !isPending;
+  }
+
+  function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  }
+
+  async function applyStatusChange(newStatus, beneficiaryEmail) {
+    const accessToken = await getAccessToken();
+    const index = currentDocument.requests.findIndex((r) => r.id === currentDetailId);
+    if (index === -1) throw new Error("Demande introuvable (déjà traitée depuis un autre appareil ?).");
+
+    const updatedDocument = JSON.parse(JSON.stringify(currentDocument));
+    updatedDocument.requests[index].status = newStatus;
+    if (beneficiaryEmail) {
+      updatedDocument.requests[index].beneficiaryEmail = beneficiaryEmail;
+    }
+    await saveRequestsDocument(updatedDocument, currentEtag, accessToken);
+    return { accessToken, item: updatedDocument.requests[index] };
+  }
+
+  validateBtn.addEventListener("click", async () => {
+    hideMessage();
+    const email = detailBeneficiaryEmail.value.trim();
+    if (!isValidEmail(email)) {
+      showMessage("Merci de saisir un email de bénéficiaire valide.", "error");
+      return;
+    }
+    validateBtn.disabled = true;
+    rejectBtn.disabled = true;
+    validateBtn.textContent = "Traitement en cours…";
+
+    try {
+      const { accessToken, item } = await applyStatusChange("Traité", email);
+
+      const pdfDoc = generateRequestPDF(item, window.APP_CONFIG.validatorName);
+      const ccEmails = [item.requesterEmail, window.APP_CONFIG.validatorEmail];
+      const bodyText = [
+        `Bonjour ${item.beneficiaryName},`,
+        "",
+        `Vous trouverez ci-joint la demande de matériel (${item.equipment}) vous concernant.`,
+        "",
+        `Merci de bien vouloir signer le document ci-joint puis de le renvoyer par retour de mail à ${window.APP_CONFIG.validatorEmail || "l'expéditeur"}.`,
+        "",
+        "Cordialement,",
+        window.APP_CONFIG.validatorName || "",
+      ].join("\n");
+
+      await sendRequestEmail({
+        accessToken,
+        toEmail: email,
+        ccEmails,
+        subject: `Demande de matériel à signer — ${item.equipment}`,
+        bodyText,
+        pdfDoc,
+        attachmentFilename: `Demande_materiel_${item.beneficiaryName || "demande"}.pdf`,
+      });
+
+      showMessage("Demande validée et mail envoyé au bénéficiaire.", "success");
+      await loadDocument();
+      showList(lastListTab);
+    } catch (error) {
+      showMessage(error.message || "Erreur lors de la validation.", "error");
+    } finally {
+      validateBtn.disabled = false;
+      rejectBtn.disabled = false;
+      validateBtn.textContent = "Valider la demande";
+    }
+  });
+
+  rejectBtn.addEventListener("click", async () => {
+    if (!confirm("Refuser cette demande ? Aucun mail ne sera envoyé.")) return;
+    hideMessage();
+    validateBtn.disabled = true;
+    rejectBtn.disabled = true;
+
+    try {
+      await applyStatusChange("Refusée", null);
+      showMessage("Demande refusée.", "success");
+      await loadDocument();
+      showList(lastListTab);
+    } catch (error) {
+      showMessage(error.message || "Erreur lors du refus.", "error");
+    } finally {
+      validateBtn.disabled = false;
+      rejectBtn.disabled = false;
+    }
+  });
+
+  signInButton.addEventListener("click", async () => {
+    try {
+      await signIn();
+    } catch (error) {
+      showMessage(error.message || "Connexion impossible.", "error");
+    }
+  });
+
+  refreshBtn.addEventListener("click", () => loadDocument());
+
+  async function loadDocument() {
+    hideMessage();
+    try {
+      const accessToken = await getAccessToken();
+      const { document: doc, etag } = await fetchRequestsDocument(accessToken);
+      currentDocument = doc;
+      currentEtag = etag;
+      renderLists();
+    } catch (error) {
+      showMessage(error.message || "Impossible de charger les demandes.", "error");
+    }
+  }
+
+  (async function init() {
+    try {
+      const account = await getActiveAccount();
+      if (account) {
+        signInCard.hidden = true;
+        appArea.hidden = false;
+        showList("pending");
+        await loadDocument();
+      } else {
+        signInCard.hidden = false;
+        appArea.hidden = true;
+      }
+    } catch (error) {
+      showMessage(error.message || "Erreur d'initialisation.", "error");
+    }
+  })();
+</script>
+</body>
+</html>

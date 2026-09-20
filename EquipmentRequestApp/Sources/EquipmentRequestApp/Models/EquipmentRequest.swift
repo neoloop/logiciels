@@ -21,15 +21,15 @@ struct EquipmentRequest: Identifiable, Codable {
     var equipmentOtherDetail: String
     var justification: String
 
-    /// Quand la demande provient d'une ligne Excel (créée par le formulaire des
+    /// Quand la demande provient du fichier JSON (créée par le formulaire des
     /// employés), le libellé de matériel est du texte libre qui ne correspond pas
     /// forcément à un cas d'EquipmentType : on le stocke tel quel plutôt que
     /// d'essayer de le faire rentrer dans l'enum.
     var equipmentLabelOverride: String?
 
-    /// Champs de contexte présents dans le tableau Excel réel mais pas dans le
+    /// Champs de contexte présents dans le fichier JSON mais pas dans le
     /// formulaire de saisie manuelle de l'app : vides pour une demande créée
-    /// depuis l'app, renseignés pour une demande relue depuis Excel.
+    /// depuis l'app, renseignés pour une demande relue depuis le JSON.
     var reference: String = ""
     var groupement: String = ""
     var phone: String = ""
@@ -70,7 +70,7 @@ struct EquipmentRequest: Identifiable, Codable {
         self.opportunity = opportunity
     }
 
-    /// Libellé du matériel affiché et écrit dans Excel (inclut le détail si "Autre").
+    /// Libellé du matériel affiché et écrit dans le JSON (inclut le détail si "Autre").
     var equipmentLabel: String {
         if let equipmentLabelOverride, !equipmentLabelOverride.isEmpty {
             return equipmentLabelOverride

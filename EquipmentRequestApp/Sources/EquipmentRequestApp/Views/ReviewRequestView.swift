@@ -9,7 +9,7 @@ struct ReviewRequestView: View {
     @EnvironmentObject private var authService: GraphAuthService
     @Environment(\.dismiss) private var dismiss
 
-    private let excelService = GraphExcelService()
+    private let jsonService = GraphJsonService()
 
     @State private var isProcessing = false
     @State private var errorMessage: String?
@@ -84,7 +84,7 @@ struct ReviewRequestView: View {
                 dismiss()
             }
         } message: {
-            Text("La demande a bien été enregistrée dans Excel, mais aucun compte mail n'est configuré sur cet appareil pour envoyer le PDF. Configurez l'app Mail puis renvoyez le PDF manuellement depuis l'historique.")
+            Text("La demande a bien été enregistrée, mais aucun compte mail n'est configuré sur cet appareil pour envoyer le PDF. Configurez l'app Mail puis renvoyez le PDF manuellement depuis l'historique.")
         }
     }
 
@@ -116,8 +116,27 @@ struct ReviewRequestView: View {
 
         do {
             let token = try await authService.acquireToken(scopes: config.graphScopes)
-            let columnMap = try await excelService.fetchColumnMap(accessToken: token, config: config)
-            try await excelService.addRow(request, columnMap: columnMap, accessToken: token, config: config)
+            let (document, etag) = try await jsonService.fetch(accessToken: token, config: config)
+
+            var updatedDocument = document
+            let newItem = JsonEquipmentRequest(
+                id: UUID().uuidString,
+                reference: request.reference,
+                date: EquipmentRequest.dateFormatter.string(from: request.date),
+                groupement: request.groupement,
+                requesterName: request.requesterName,
+                requesterEmail: request.requesterEmail,
+                beneficiaryName: request.beneficiaryName,
+                beneficiaryEmail: request.beneficiaryEmail,
+                phone: request.phone,
+                equipment: request.equipmentLabel,
+                software: request.software,
+                opportunity: request.opportunity,
+                justification: request.justification,
+                status: RequestStatus.processed.rawValue
+            )
+            updatedDocument.requests.append(newItem)
+            try await jsonService.save(updatedDocument, expectedEtag: etag, accessToken: token, config: config)
 
             let pdf = PDFGenerator.makeRequestPDF(for: request, validatorName: config.validatorName)
             self.pdfData = pdf

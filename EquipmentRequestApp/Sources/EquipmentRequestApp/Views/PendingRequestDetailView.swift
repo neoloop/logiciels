@@ -5,15 +5,16 @@ import MessageUI
 /// (écrit le statut "Traité", génère le PDF et ouvre le mail pré-rempli) ou
 /// Refuser (écrit "Refusée", sans PDF ni mail).
 struct PendingRequestDetailView: View {
-    let row: ExcelEquipmentRequestRow
-    let columnMap: ColumnMap
+    let request: JsonEquipmentRequest
+    let document: RequestsDocument
+    let etag: String?
     let onHandled: () -> Void
 
     @EnvironmentObject private var config: AppConfig
     @EnvironmentObject private var authService: GraphAuthService
     @Environment(\.dismiss) private var dismiss
 
-    private let excelService = GraphExcelService()
+    private let jsonService = GraphJsonService()
 
     @State private var beneficiaryEmailInput: String
     @State private var isProcessing = false
@@ -23,15 +24,16 @@ struct PendingRequestDetailView: View {
     @State private var showMailUnavailableAlert = false
     @State private var showRejectConfirmation = false
 
-    init(row: ExcelEquipmentRequestRow, columnMap: ColumnMap, onHandled: @escaping () -> Void) {
-        self.row = row
-        self.columnMap = columnMap
+    init(request: JsonEquipmentRequest, document: RequestsDocument, etag: String?, onHandled: @escaping () -> Void) {
+        self.request = request
+        self.document = document
+        self.etag = etag
         self.onHandled = onHandled
-        _beneficiaryEmailInput = State(initialValue: row.beneficiaryEmail)
+        _beneficiaryEmailInput = State(initialValue: request.beneficiaryEmail)
     }
 
     private var equipmentRequest: EquipmentRequest {
-        row.asEquipmentRequest(overrideBeneficiaryEmail: beneficiaryEmailInput)
+        request.asEquipmentRequest(overrideBeneficiaryEmail: beneficiaryEmailInput)
     }
 
     private var canValidate: Bool {
@@ -41,53 +43,53 @@ struct PendingRequestDetailView: View {
     var body: some View {
         Form {
             Section("Demandeur") {
-                LabeledContent("Nom", value: row.requesterName)
-                LabeledContent("Email", value: row.requesterEmail)
+                LabeledContent("Nom", value: request.requesterName)
+                LabeledContent("Email", value: request.requesterEmail)
             }
             Section("Bénéficiaire") {
-                LabeledContent("Nom", value: row.beneficiaryName)
+                LabeledContent("Nom", value: request.beneficiaryName)
                 TextField("Email du bénéficiaire", text: $beneficiaryEmailInput)
                     .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
                     .keyboardType(.emailAddress)
-                if !row.phone.isEmpty {
-                    LabeledContent("Téléphone", value: row.phone)
+                if !request.phone.isEmpty {
+                    LabeledContent("Téléphone", value: request.phone)
                 }
             }
-            if row.beneficiaryEmail.isEmpty {
+            if request.beneficiaryEmail.isEmpty {
                 Section {
-                    Text("Le tableau Excel ne contient pas encore d'email pour le bénéficiaire. Saisissez-le ci-dessus : il sera aussi enregistré dans Excel lors de la validation.")
+                    Text("Aucun email de bénéficiaire enregistré pour cette demande. Saisissez-le ci-dessus : il sera enregistré lors de la validation.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
 
             Section("Matériel") {
-                LabeledContent("Type", value: row.equipmentLabel)
-                if !row.software.isEmpty {
-                    LabeledContent("Logiciels", value: row.software)
+                LabeledContent("Type", value: request.equipment)
+                if !request.software.isEmpty {
+                    LabeledContent("Logiciels", value: request.software)
                 }
-                if !row.date.isEmpty {
-                    LabeledContent("Date de la demande", value: row.date)
+                if !request.date.isEmpty {
+                    LabeledContent("Date de la demande", value: request.date)
                 }
             }
 
-            if !row.groupement.isEmpty || !row.opportunity.isEmpty || !row.reference.isEmpty {
+            if !request.groupement.isEmpty || !request.opportunity.isEmpty || !request.reference.isEmpty {
                 Section("Contexte") {
-                    if !row.reference.isEmpty {
-                        LabeledContent("Référence", value: row.reference)
+                    if !request.reference.isEmpty {
+                        LabeledContent("Référence", value: request.reference)
                     }
-                    if !row.groupement.isEmpty {
-                        LabeledContent("Groupement", value: row.groupement)
+                    if !request.groupement.isEmpty {
+                        LabeledContent("Groupement", value: request.groupement)
                     }
-                    if !row.opportunity.isEmpty {
-                        LabeledContent("Opportunité", value: row.opportunity)
+                    if !request.opportunity.isEmpty {
+                        LabeledContent("Opportunité", value: request.opportunity)
                     }
                 }
             }
 
             Section("Observations") {
-                Text(row.justification.isEmpty ? "—" : row.justification)
+                Text(request.justification.isEmpty ? "—" : request.justification)
             }
 
             if let errorMessage {
@@ -130,17 +132,17 @@ struct PendingRequestDetailView: View {
             }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("Le statut sera mis à jour dans Excel. Aucun mail ne sera envoyé.")
+            Text("Le statut sera mis à jour. Aucun mail ne sera envoyé.")
         }
         .sheet(isPresented: $showMailSheet) {
             if let pdfData {
                 MailComposeView(
                     recipients: [beneficiaryEmailInput],
                     ccRecipients: ccRecipients,
-                    subject: "Demande de matériel à signer — \(row.equipmentLabel)",
+                    subject: "Demande de matériel à signer — \(request.equipment)",
                     body: mailBody,
                     attachmentData: pdfData,
-                    attachmentFilename: "Demande_materiel_\(row.beneficiaryName).pdf",
+                    attachmentFilename: "Demande_materiel_\(request.beneficiaryName).pdf",
                     onFinish: { _ in
                         onHandled()
                         dismiss()
@@ -154,12 +156,12 @@ struct PendingRequestDetailView: View {
                 dismiss()
             }
         } message: {
-            Text("La demande a bien été validée dans Excel, mais aucun compte mail n'est configuré sur cet appareil pour envoyer le PDF. Renvoyez-le manuellement.")
+            Text("La demande a bien été validée, mais aucun compte mail n'est configuré sur cet appareil pour envoyer le PDF. Renvoyez-le manuellement.")
         }
     }
 
     private var ccRecipients: [String] {
-        var recipients = [row.requesterEmail]
+        var recipients = [request.requesterEmail]
         if !config.validatorEmail.isEmpty {
             recipients.append(config.validatorEmail)
         }
@@ -168,9 +170,9 @@ struct PendingRequestDetailView: View {
 
     private var mailBody: String {
         """
-        Bonjour \(row.beneficiaryName),
+        Bonjour \(request.beneficiaryName),
 
-        Vous trouverez ci-joint la demande de matériel (\(row.equipmentLabel)) vous concernant.
+        Vous trouverez ci-joint la demande de matériel (\(request.equipment)) vous concernant.
 
         Merci de bien vouloir signer le document ci-joint puis de le renvoyer par retour de mail à \(config.validatorEmail.isEmpty ? "l'expéditeur" : config.validatorEmail).
 
@@ -179,21 +181,24 @@ struct PendingRequestDetailView: View {
         """
     }
 
+    private func applyStatusChange(_ status: RequestStatus, updatedBeneficiaryEmail: String?) async throws {
+        var updatedDocument = document
+        guard let index = updatedDocument.requests.firstIndex(where: { $0.id == request.id }) else { return }
+        updatedDocument.requests[index].requestStatus = status
+        if let updatedBeneficiaryEmail, !updatedBeneficiaryEmail.isEmpty {
+            updatedDocument.requests[index].beneficiaryEmail = updatedBeneficiaryEmail
+        }
+        let token = try await authService.acquireToken(scopes: config.graphScopes)
+        try await jsonService.save(updatedDocument, expectedEtag: etag, accessToken: token, config: config)
+    }
+
     private func validate() async {
         isProcessing = true
         errorMessage = nil
         defer { isProcessing = false }
 
         do {
-            let token = try await authService.acquireToken(scopes: config.graphScopes)
-            try await excelService.updateStatus(
-                .processed,
-                for: row,
-                columnMap: columnMap,
-                beneficiaryEmail: beneficiaryEmailInput,
-                accessToken: token,
-                config: config
-            )
+            try await applyStatusChange(.processed, updatedBeneficiaryEmail: beneficiaryEmailInput)
 
             let pdf = PDFGenerator.makeRequestPDF(for: equipmentRequest, validatorName: config.validatorName)
             self.pdfData = pdf
@@ -214,8 +219,7 @@ struct PendingRequestDetailView: View {
         defer { isProcessing = false }
 
         do {
-            let token = try await authService.acquireToken(scopes: config.graphScopes)
-            try await excelService.updateStatus(.rejected, for: row, columnMap: columnMap, accessToken: token, config: config)
+            try await applyStatusChange(.rejected, updatedBeneficiaryEmail: nil)
             onHandled()
             dismiss()
         } catch {

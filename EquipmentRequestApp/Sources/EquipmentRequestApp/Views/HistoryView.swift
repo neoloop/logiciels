@@ -3,9 +3,9 @@ import SwiftUI
 struct HistoryView: View {
     @EnvironmentObject private var config: AppConfig
     @EnvironmentObject private var authService: GraphAuthService
-    private let excelService = GraphExcelService()
+    private let jsonService = GraphJsonService()
 
-    @State private var rows: [ExcelEquipmentRequestRow] = []
+    @State private var requests: [JsonEquipmentRequest] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
 
@@ -16,11 +16,11 @@ struct HistoryView: View {
                     ProgressView("Chargement…")
                 } else if let errorMessage {
                     ContentUnavailableView("Impossible de charger l'historique", systemImage: "exclamationmark.triangle", description: Text(errorMessage))
-                } else if rows.isEmpty {
+                } else if requests.isEmpty {
                     ContentUnavailableView("Aucune demande", systemImage: "tray")
                 } else {
-                    List(rows) { row in
-                        RowSummaryView(row: row)
+                    List(requests) { item in
+                        RowSummaryView(item: item)
                     }
                 }
             }
@@ -45,7 +45,8 @@ struct HistoryView: View {
         defer { isLoading = false }
         do {
             let token = try await authService.acquireToken(scopes: config.graphScopes)
-            rows = try await excelService.fetchRequests(accessToken: token, config: config).rows
+            let result = try await jsonService.fetch(accessToken: token, config: config)
+            requests = Array(result.document.requests.reversed())
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -53,20 +54,20 @@ struct HistoryView: View {
 }
 
 private struct RowSummaryView: View {
-    let row: ExcelEquipmentRequestRow
+    let item: JsonEquipmentRequest
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(row.equipmentLabel.isEmpty ? "Matériel non précisé" : row.equipmentLabel)
+                Text(item.equipment.isEmpty ? "Matériel non précisé" : item.equipment)
                     .font(.headline)
                 Spacer()
-                StatusBadge(status: row.status)
+                StatusBadge(status: item.requestStatus)
             }
-            Text("Pour \(row.beneficiaryName) — demandé par \(row.requesterName)")
+            Text("Pour \(item.beneficiaryName) — demandé par \(item.requesterName)")
                 .font(.subheadline)
-            if !row.date.isEmpty {
-                Text(row.date)
+            if !item.date.isEmpty {
+                Text(item.date)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

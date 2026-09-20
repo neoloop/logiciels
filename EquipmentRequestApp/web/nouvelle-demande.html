@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nouvelle demande de matériel</title>
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+<div class="page">
+  <header class="app-header">
+    <h1>Nouvelle demande de matériel</h1>
+    <p>Ordinateur, téléphone, clé USB… remplissez ce formulaire, votre demande sera transmise pour validation.</p>
+  </header>
+
+  <div id="statusMessage" class="status-message" hidden></div>
+
+  <div id="signInCard" class="card" hidden>
+    <h2>Connexion requise</h2>
+    <p>Connectez-vous avec votre compte Microsoft 365 professionnel pour soumettre une demande.</p>
+    <button class="primary" id="signInButton">Se connecter à Microsoft 365</button>
+  </div>
+
+  <form id="requestForm" class="card" hidden>
+    <h2>Votre demande</h2>
+
+    <label for="requesterName">Votre nom (demandeur)</label>
+    <input type="text" id="requesterName" required autocomplete="name" />
+
+    <label for="requesterEmail">Votre email</label>
+    <input type="email" id="requesterEmail" required autocomplete="email" />
+
+    <label for="beneficiaryName">Pour qui est le matériel ?</label>
+    <input type="text" id="beneficiaryName" required placeholder="Nom du bénéficiaire" />
+
+    <label for="beneficiaryEmail">Email du bénéficiaire (si différent de vous)</label>
+    <input type="email" id="beneficiaryEmail" placeholder="Optionnel" />
+    <div class="hint">Recommandé : permet d'envoyer directement le document à signer à la bonne personne.</div>
+
+    <label for="equipment">Type de matériel</label>
+    <select id="equipment">
+      <option value="Ordinateur portable">Ordinateur portable</option>
+      <option value="Ordinateur fixe">Ordinateur fixe</option>
+      <option value="Téléphone">Téléphone</option>
+      <option value="Clé USB">Clé USB</option>
+      <option value="Autre">Autre (préciser ci-dessous)</option>
+    </select>
+
+    <div id="equipmentOtherWrap" hidden>
+      <label for="equipmentOther">Précisez le matériel</label>
+      <input type="text" id="equipmentOther" />
+    </div>
+
+    <label for="software">Logiciels nécessaires</label>
+    <input type="text" id="software" placeholder="Optionnel" />
+
+    <label for="groupement">Groupement / service</label>
+    <input type="text" id="groupement" placeholder="Optionnel" />
+
+    <label for="phone">Téléphone de contact</label>
+    <input type="tel" id="phone" placeholder="Optionnel" />
+
+    <label for="justification">Justification de la demande</label>
+    <textarea id="justification" required placeholder="Pourquoi ce matériel est-il nécessaire ?"></textarea>
+
+    <button type="submit" class="primary" id="submitButton">Envoyer la demande</button>
+  </form>
+</div>
+
+<!-- MSAL.js (authentification Microsoft) -->
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/auth.js"></script>
+<script src="assets/graphClient.js"></script>
+<script>
+  const statusMessage = document.getElementById("statusMessage");
+  const signInCard = document.getElementById("signInCard");
+  const requestForm = document.getElementById("requestForm");
+  const signInButton = document.getElementById("signInButton");
+  const equipmentSelect = document.getElementById("equipment");
+  const equipmentOtherWrap = document.getElementById("equipmentOtherWrap");
+  const equipmentOtherInput = document.getElementById("equipmentOther");
+  const submitButton = document.getElementById("submitButton");
+
+  function showMessage(text, kind) {
+    statusMessage.textContent = text;
+    statusMessage.className = `status-message ${kind}`;
+    statusMessage.hidden = false;
+  }
+
+  function hideMessage() {
+    statusMessage.hidden = true;
+  }
+
+  equipmentSelect.addEventListener("change", () => {
+    equipmentOtherWrap.hidden = equipmentSelect.value !== "Autre";
+  });
+
+  signInButton.addEventListener("click", async () => {
+    try {
+      await signIn();
+    } catch (error) {
+      showMessage(error.message || "Connexion impossible.", "error");
+    }
+  });
+
+  function formatDateFR(date) {
+    return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+
+  requestForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    hideMessage();
+    submitButton.disabled = true;
+    submitButton.textContent = "Envoi en cours…";
+
+    try {
+      const equipment =
+        equipmentSelect.value === "Autre" && equipmentOtherInput.value.trim()
+          ? `Autre : ${equipmentOtherInput.value.trim()}`
+          : equipmentSelect.value;
+
+      const newItem = {
+        id: (crypto.randomUUID && crypto.randomUUID()) || `req-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        reference: `WEB-${Date.now()}`,
+        date: formatDateFR(new Date()),
+        groupement: document.getElementById("groupement").value.trim(),
+        requesterName: document.getElementById("requesterName").value.trim(),
+        requesterEmail: document.getElementById("requesterEmail").value.trim(),
+        beneficiaryName: document.getElementById("beneficiaryName").value.trim(),
+        beneficiaryEmail: document.getElementById("beneficiaryEmail").value.trim(),
+        phone: document.getElementById("phone").value.trim(),
+        equipment,
+        software: document.getElementById("software").value.trim(),
+        opportunity: "",
+        justification: document.getElementById("justification").value.trim(),
+        status: "En attente",
+        receptionDate: "",
+      };
+
+      const accessToken = await getAccessToken();
+      const { document: doc, etag } = await fetchRequestsDocument(accessToken);
+      doc.requests.push(newItem);
+      await saveRequestsDocument(doc, etag, accessToken);
+
+      requestForm.reset();
+      equipmentOtherWrap.hidden = true;
+      showMessage("Votre demande a bien été envoyée. Elle sera examinée prochainement.", "success");
+    } catch (error) {
+      showMessage(error.message || "Une erreur est survenue lors de l'envoi.", "error");
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = "Envoyer la demande";
+    }
+  });
+
+  (async function init() {
+    try {
+      const account = await getActiveAccount();
+      if (account) {
+        signInCard.hidden = true;
+        requestForm.hidden = false;
+        document.getElementById("requesterName").value = account.name || "";
+        document.getElementById("requesterEmail").value = account.username || "";
+      } else {
+        signInCard.hidden = false;
+        requestForm.hidden = true;
+      }
+    } catch (error) {
+      showMessage(error.message || "Erreur d'initialisation.", "error");
+    }
+  })();
+</script>
+</body>
+</html>

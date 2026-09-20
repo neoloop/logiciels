@@ -1,53 +1,57 @@
 # Demandes de matériel — app iOS
 
 Application iOS (SwiftUI) pour **valider les demandes de matériel** soumises
-par les employés de la société, actuellement via un mail structuré traité par
-un flux **Power Automate** qui alimente le tableau `Demandes_Materiel` du
-classeur Excel `Suivi_Demandes_Materiel_SIS2B.xlsx` sur **OneDrive /
-SharePoint**.
+par les employés de la société, aux côtés de deux pages web (voir
+[`../web/README.md`](../web/README.md)) qui permettent de soumettre et de
+consulter/valider les demandes depuis un navigateur.
 
-Rôle principal de l'app : vous (le valideur) consultez la liste des demandes
-en attente, et pour chacune :
+Les trois s'appuient sur **une seule source de vérité** : un fichier **JSON**
+stocké sur **OneDrive/SharePoint**, lu et écrit via Microsoft Graph — pas de
+backend à héberger.
 
-- **Valider** → l'app écrit le statut `Traité` dans le tableau Excel, génère un
+Rôle principal de l'app iOS : vous (le valideur) consultez la liste des
+demandes en attente, et pour chacune :
+
+- **Valider** → l'app écrit le statut `Traité` dans le JSON, génère un
   **PDF** récapitulant la demande (avec zone de signature), puis ouvre une
   fenêtre **Mail** pré-remplie (destinataire = bénéficiaire, copie =
   demandeur + vous, PDF en pièce jointe) pour l'envoyer signer ;
-- **Refuser** → l'app écrit le statut `Refusée` dans Excel, sans PDF ni mail.
+- **Refuser** → l'app écrit le statut `Refusée` dans le JSON, sans PDF ni mail.
 
 L'app permet aussi, en secondaire, d'ajouter vous-même une demande
 directement (déjà marquée `Traité` à la création) — utile si une demande vous
 arrive par un autre canal (oral, téléphone...).
 
-L'app ne fait rien "en silence" : la validation écrit dans Excel, mais
+L'app ne fait rien "en silence" : la validation écrit dans le JSON, mais
 l'envoi du mail reste une action manuelle (vous cliquez sur "Envoyer" dans la
-feuille Mail qui s'ouvre déjà remplie).
+feuille Mail qui s'ouvre déjà remplie). La page web équivalente
+(`valider.html`) envoie le mail directement via Microsoft Graph, un
+navigateur ne pouvant pas ouvrir de fenêtre Mail native pré-remplie avec
+pièce jointe — voir `web/README.md`.
 
 Cette app est mono-utilisateur côté validation : une seule personne (vous)
-valide les demandes depuis l'app. Les employés, eux, n'ont pas besoin de
-cette app : ils utilisent le circuit existant (mail structuré → Power
-Automate → Excel).
+valide les demandes depuis l'app ou la page web équivalente.
 
-## Comment ça s'articule avec le circuit existant
+## Comment ça s'articule avec les pages web et le fichier JSON
 
 ```
-Employé          Mail structuré        Power Automate        Excel (OneDrive)          App iOS (vous)
--------          --------------        --------------        ----------------          ---------------
-Envoie un   ---> "Clé=valeur|..."  --> Parse le mail    ---> Nouvelle ligne dans   ---> Onglet "À valider"
-mail selon       dans le corps          et ajoute une         Demandes_Materiel,         liste la ligne
-le format                              ligne au tableau       colonne Statut vide         (statut vide)
-attendu                                                       ("en attente")
-                                                                                          Vous appuyez sur
-                                                                                          Valider ou Refuser
-                                                                Colonne Statut mise  <---
-                                                                à jour ("Traité" /
-                                                                "Refusée")
+Employé                          Page web                    Fichier JSON               App iOS (vous) ou
+                                  "Nouvelle demande"           (OneDrive/SharePoint)       page web "Valider"
+--------                         ------------------            ---------------------      -------------------
+Remplit le formulaire     --->   Ajoute une entrée       --->  Nouvelle demande,     --->  Liste "À valider"
+sur son navigateur                au JSON via Graph             statut "En attente"         affiche la demande
+
+                                                                                             Valider ou Refuser
+                                                                Statut mis à jour      <---  (PDF + mail si
+                                                                ("Traité"/"Refusée")          validé)
 ```
 
-L'app ne remplace pas ce circuit existant : elle se branche dessus en lisant
-et en mettant à jour le même tableau Excel. Si votre flux Power Automate
-change, seuls les noms de colonnes doivent rester cohérents avec ceux listés
-ci-dessous (l'app les identifie par nom, pas par position).
+Le fichier JSON remplace l'ancien tableau Excel (`Demandes_Materiel`) utilisé
+précédemment : plus besoin de correspondance par nom de colonne, tout est
+directement typé. Un même fichier peut être modifié indifféremment par l'app
+iOS ou l'une des deux pages web ; un ETag protège contre les écritures
+concurrentes (si deux personnes valident au même moment, la seconde écriture
+échoue proprement et invite à recharger plutôt que d'écraser la première).
 
 ## Prérequis
 
@@ -65,13 +69,15 @@ ci-dessous (l'app les identifie par nom, pas par position).
 
 ## 1. Créer l'inscription d'application Azure AD
 
-L'app se connecte à Microsoft Graph pour lire/écrire le fichier Excel. Il faut
-déclarer l'app dans Azure Portal :
+L'app (et les pages web) se connectent à Microsoft Graph pour lire/écrire le
+fichier JSON. Une **seule** inscription Azure AD suffit pour l'app iOS et les
+pages web (elle peut porter plusieurs plateformes : iOS et Application
+monopage/SPA).
 
 1. Allez sur [portal.azure.com](https://portal.azure.com) → **Azure Active
    Directory** (ou **Microsoft Entra ID**) → **Inscriptions d'applications** →
    **Nouvelle inscription**.
-2. Nom : `Demandes Matériel iOS` (libre).
+2. Nom : `Demandes Matériel` (libre).
 3. Types de comptes pris en charge : selon votre organisation (généralement
    "Comptes dans cet annuaire organisationnel uniquement").
 4. Ne renseignez pas d'URI de redirection ici, on l'ajoute après.
@@ -87,84 +93,80 @@ déclarer l'app dans Azure Portal :
      `msauth.com.example.EquipmentRequestApp://auth`. Vérifiez qu'elle
      correspond exactement à celle dans `Info.plist`
      (`CFBundleURLTypes`).
-7. **API permissions** → **Ajouter une autorisation** → **Microsoft Graph** →
+7. Toujours dans **Authentification** → **Ajouter une plateforme** →
+   **Application monopage (SPA)** : ajoutez l'URL exacte de chacune des deux
+   pages web une fois déployées sur votre NAS (ex :
+   `https://nas.exemple.local:5001/nouvelle-demande.html` et
+   `.../valider.html`) — voir `web/README.md` pour le détail complet de
+   cette étape (nécessite une adresse HTTPS, même en local).
+8. **API permissions** → **Ajouter une autorisation** → **Microsoft Graph** →
    **Delegated permissions** → ajoutez :
    - `Files.ReadWrite`
    - `Sites.ReadWrite.All` (nécessaire seulement si le fichier est sur un site
      SharePoint plutôt que sur le OneDrive personnel de l'utilisateur)
+   - `Mail.Send` (nécessaire uniquement pour la page web `valider.html`, qui
+     envoie le mail via Graph — l'app iOS utilise l'app Mail locale et n'en a
+     pas besoin, mais l'ajouter ne gêne pas)
    - `User.Read` (généralement déjà présent par défaut)
    Cliquez ensuite sur **Accorder un consentement administrateur** si demandé
    par votre organisation.
-8. **Authentification** → activez **Flux de client public autorisés** (Allow
+9. **Authentification** → activez **Flux de client public autorisés** (Allow
    public client flows) sur `Yes`.
 
-## 2. Le tableau Excel `Demandes_Materiel`
+## 2. Le fichier JSON des demandes
 
-D'après le fichier `Suivi_Demandes_Materiel_SIS2B.xlsx` déjà en usage :
-classeur avec deux feuilles ("Demandes" et "Statistiques"), et un tableau
-nommé **`Demandes_Materiel`** sur la feuille "Demandes" avec ces colonnes :
+Le fichier (ex : `Suivi_Demandes_Materiel_SIS2B.json`) contient un objet avec
+un tableau `requests`, chaque demande ayant ces champs :
 
-| Colonne Excel | Rôle dans l'app |
-|---|---|
-| `Reference` | Référence de la demande (ex : objet du mail reçu), affichée dans le détail et le PDF |
-| `Date` | Date de la demande |
-| `Groupement` | Service/groupement du demandeur, affiché dans le détail et le PDF |
-| `Nom_Demandeur` | Nom du demandeur |
-| `Mail_Demandeur` | Email du demandeur (copie du mail envoyé) |
-| `Pour_Qui` | Nom du bénéficiaire |
-| `Telephone` | Téléphone (affiché dans le détail et le PDF) |
-| `Materiel` | Type de matériel demandé |
-| `Logiciels` | Logiciels associés, affichés dans le détail et le PDF |
-| `Opportunite` | Référence commerciale/projet associée, affichée dans le détail et le PDF |
-| `Statut` | **En attente** / **En cours** / **Traité** / **Refusée** — mise à jour par l'app |
-| `Date_Reception` | Non modifiée par l'app (réservée à un usage manuel ou futur) |
-| `Observations` | Utilisé comme justification de la demande, affichée dans le détail et le PDF |
+```json
+{
+  "schemaVersion": 1,
+  "requests": [
+    {
+      "id": "identifiant unique (UUID)",
+      "reference": "référence libre (optionnelle)",
+      "date": "20/09/2026",
+      "groupement": "service/groupement du demandeur",
+      "requesterName": "nom du demandeur",
+      "requesterEmail": "email du demandeur",
+      "beneficiaryName": "nom du bénéficiaire",
+      "beneficiaryEmail": "email du bénéficiaire",
+      "phone": "téléphone de contact",
+      "equipment": "type de matériel demandé",
+      "software": "logiciels nécessaires",
+      "opportunity": "référence commerciale/projet associée",
+      "justification": "justification de la demande",
+      "status": "En attente | En cours | Traité | Refusée",
+      "receptionDate": "réservé, non utilisé par l'app pour l'instant"
+    }
+  ]
+}
+```
 
-L'app identifie chaque colonne par son **intitulé exact** ci-dessus, avec
-quelques synonymes acceptés en secours (insensible à la casse et aux
-accents) — voir `Sources/EquipmentRequestApp/Models/ColumnMap.swift` pour la
-liste complète. Des colonnes supplémentaires ne posent aucun problème,
-l'app les ignore simplement.
+Il n'y a rien à créer manuellement : si le fichier n'existe pas encore à
+l'emplacement configuré, l'app iOS et les pages web le créent automatiquement
+lors du premier enregistrement.
 
-### ⚠️ Colonne manquante à ajouter : `Mail_Pour_Qui`
+### Statut : cycle utilisé par l'app et les pages web
 
-Le tableau actuel ne contient **pas** l'email du bénéficiaire (`Pour_Qui`
-n'est qu'un nom), pourtant nécessaire pour lui envoyer le PDF à signer.
-Deux choses à faire :
-
-1. **Ajoutez une colonne `Mail_Pour_Qui`** au tableau Excel (et si possible
-   au flux Power Automate / format de mail attendu, pour qu'elle soit
-   renseignée automatiquement pour les nouvelles demandes).
-2. En attendant (ou pour les lignes créées avant cet ajout), l'écran de
-   validation de l'app affiche un champ **email du bénéficiaire éditable**,
-   pré-rempli si la colonne existe et est renseignée, modifiable sinon. La
-   valeur saisie est enregistrée dans la colonne `Mail_Pour_Qui` au moment de
-   la validation (si la colonne existe).
-
-### Statut : cycle utilisé par l'app
-
-La feuille "Statistiques" du classeur montre que la colonne Statut utilise
-déjà 3 valeurs (`En attente`, `En cours`, `Traité`). Cette app utilise un
-cycle simplifié à la demande :
-
-- Une ligne dont le Statut est vide ou différent de `Traité`/`Refusée` (donc
-  y compris `En attente` ou `En cours`) apparaît dans l'onglet **À valider**.
-- **Valider** fait passer le Statut directement à **`Traité`** (pas d'étape
-  intermédiaire `En cours` déclenchée par l'app).
-- **Refuser** fait passer le Statut à **`Refusée`** (valeur ajoutée par cette
-  app ; elle n'apparaît pas dans les compteurs existants de la feuille
-  Statistiques, mais ne les perturbe pas non plus).
+- Une demande dont le statut est vide ou différent de `Traité`/`Refusée`
+  (donc y compris `En attente` ou `En cours`) apparaît dans la liste
+  **À valider**.
+- **Valider** fait passer le statut directement à **`Traité`** (pas d'étape
+  intermédiaire `En cours` déclenchée automatiquement).
+- **Refuser** fait passer le statut à **`Refusée`**.
 
 ### Chemin du fichier
 
 Notez le chemin du fichier tel qu'il apparaît dans le lecteur OneDrive/
 SharePoint (relatif à la racine du lecteur), par exemple
-`Suivi_Demandes_Materiel_SIS2B.xlsx` s'il est à la racine, ou
-`Dossier/Suivi_Demandes_Materiel_SIS2B.xlsx` sinon.
+`Suivi_Demandes_Materiel_SIS2B.json` s'il est à la racine, ou
+`Dossier/Suivi_Demandes_Materiel_SIS2B.json` sinon. **Ce doit être exactement
+le même chemin** dans les Réglages de l'app iOS et dans `web/assets/config.js`
+des deux pages web.
 
 - Si le fichier est dans **votre OneDrive personnel/entreprise** :
-  laissez `driveBasePath` = `/me/drive` dans les Réglages de l'app (valeur
-  par défaut).
+  laissez `driveBasePath` = `/me/drive` (valeur par défaut).
 - Si le fichier est sur un **site SharePoint** : il faut utiliser
   `/sites/{site-id}/drive` comme `driveBasePath`. Pour trouver le
   `site-id`, appelez (avec un compte ayant accès, via
@@ -199,28 +201,28 @@ Dans l'onglet **Réglages** de l'app (les valeurs par défaut correspondent déj
 au fichier SIS2B) :
 
 1. **Client ID** et **Tenant ID** : collez les valeurs notées à l'étape 1.
-2. **Base du lecteur**, **chemin du fichier .xlsx**, **nom du tableau** :
-   valeurs de l'étape 2 (`Demandes_Materiel` est déjà le nom par défaut).
+2. **Base du lecteur** et **chemin du fichier .json** : valeurs de l'étape 2.
 3. **Votre nom** / **Votre email** : utilisés en copie du mail envoyé et comme
    destinataire indiqué pour le retour du document signé.
 4. Bouton **Se connecter à Microsoft 365** : une fenêtre de connexion
    Microsoft s'ouvre (Safari intégré). Connectez-vous avec le compte qui a
-   accès au fichier Excel.
+   accès au fichier.
 
 ## 5. Utiliser l'app
 
-1. Onglet **À valider** (écran principal) : liste toutes les lignes du
-   tableau Excel dont le statut n'est ni `Traité` ni `Refusée`. Tirez vers
-   le bas pour rafraîchir après qu'une nouvelle demande est arrivée.
+1. Onglet **À valider** (écran principal) : liste toutes les demandes dont le
+   statut n'est ni `Traité` ni `Refusée`. Tirez vers le bas pour rafraîchir
+   après qu'une nouvelle demande est arrivée (via la page web ou un autre
+   moyen).
 2. Touchez une demande pour voir son détail (demandeur, bénéficiaire,
    matériel, logiciels, groupement, opportunité, observations...), vérifiez/
    complétez l'**email du bénéficiaire** si besoin, puis :
-   - **Valider la demande** → l'app écrit `Traité` dans Excel (et l'email
+   - **Valider la demande** → l'app écrit `Traité` dans le JSON (et l'email
      bénéficiaire s'il a été saisi), génère le PDF, puis ouvre la feuille
      **Mail** pré-remplie (PDF en pièce jointe, adressée au bénéficiaire,
      avec le demandeur et vous en copie). Vérifiez et appuyez sur **Envoyer**.
    - **Refuser la demande** → confirmation, puis l'app écrit `Refusée` dans
-     Excel. Aucun mail n'est envoyé.
+     le JSON. Aucun mail n'est envoyé.
 3. Le bénéficiaire signe le PDF reçu (à la main après impression, ou en
    l'annotant directement dans l'app Mail/Fichiers avec l'outil Marqueur) et
    vous le renvoie par retour de mail.
@@ -230,22 +232,19 @@ au fichier SIS2B) :
    les champs Groupement/Téléphone/Logiciels/Opportunité restent vides pour
    ces demandes.
 5. Onglet **Historique** : liste toutes les demandes (en attente, en cours,
-   traitées, refusées) avec leur statut, relues directement depuis le tableau
-   Excel.
+   traitées, refusées) avec leur statut, relues directement depuis le fichier
+   JSON.
 
 ## Notes techniques
 
 - Aucun backend n'est nécessaire : l'app appelle directement l'API Microsoft
-  Graph (`workbook/tables/...`) pour lire et écrire dans le classeur Excel
-  tel quel — le fichier reste ouvrable normalement dans Excel/Office en ligne,
-  et continue d'être alimenté par le flux Power Automate existant.
-- Les colonnes sont identifiées par leur **nom d'en-tête**, pas par position :
-  l'app est donc tolérante à l'ordre des colonnes et aux colonnes
-  supplémentaires.
-- Mettre à jour une ligne (validation/refus) renvoie l'intégralité de ses
-  valeurs à Microsoft Graph (colonnes Statut et, le cas échéant,
-  Mail_Pour_Qui modifiées, le reste inchangé), afin de ne perdre aucune
-  donnée écrite par le flux Power Automate.
+  Graph (`GET`/`PUT .../content`) pour lire et écrire le fichier JSON tel
+  quel sur OneDrive/SharePoint.
+- Toute écriture (validation/refus/ajout) renvoie l'intégralité du fichier à
+  Microsoft Graph, protégée par un en-tête `If-Match` (ETag) : si le fichier
+  a changé entre-temps (autre personne, autre appareil, page web), Graph
+  répond 412 et l'app affiche une erreur invitant à recharger plutôt que
+  d'écraser silencieusement.
 - L'authentification utilise [MSAL pour iOS](https://github.com/AzureAD/microsoft-authentication-library-for-objc),
   la librairie officielle Microsoft, installée via Swift Package Manager
   (déclarée dans `project.yml`).
@@ -255,30 +254,25 @@ au fichier SIS2B) :
   Mail déjà configuré sur l'iPhone (Exchange, iCloud, Gmail…), aucune
   configuration SMTP supplémentaire n'est nécessaire côté app. Si aucun
   compte Mail n'est configuré sur l'appareil, l'app avertit que la demande a
-  bien été validée dans Excel mais qu'il faudra renvoyer le PDF manuellement.
+  bien été validée mais qu'il faudra renvoyer le PDF manuellement.
 
 ## Limites connues / pistes d'amélioration
 
 - Un seul valideur : pour permettre à plusieurs personnes de valider depuis
   l'app, il faudrait ajouter une notion de rôle/compte (actuellement tout
   utilisateur connecté avec les bons droits Graph peut valider).
-- La colonne `Mail_Pour_Qui` n'existe pas encore dans le tableau réel — voir
-  la section 2 ci-dessus. Tant qu'elle n'est pas ajoutée, l'app fonctionne
-  quand même grâce au champ email éditable, mais rien n'est pré-rempli
-  automatiquement pour les nouvelles demandes.
-- Le statut `En cours` existant dans le tableau n'est pas utilisé par l'app
-  (qui passe directement de `En attente` à `Traité`) ; si ce statut
-  intermédiaire doit être piloté depuis l'app plus tard, il faudra ajouter un
-  bouton "Marquer comme en cours" séparé.
-- `Date_Reception` n'est pas renseigné par l'app : le retour du PDF signé se
-  fait par mail classique et n'est pas réimporté automatiquement dans Excel.
+- Le statut `En cours` n'est pas utilisé par l'app (qui passe directement de
+  `En attente` à `Traité`) ; si ce statut intermédiaire doit être piloté
+  depuis l'app plus tard, il faudra ajouter un bouton "Marquer comme en
+  cours" séparé.
+- `receptionDate` n'est pas renseigné par l'app : le retour du PDF signé se
+  fait par mail classique et n'est pas réimporté automatiquement.
 - Pas de notification push quand une nouvelle demande arrive : il faut ouvrir
   l'app et tirer pour rafraîchir l'onglet "À valider".
 - L'icône d'application (`AppIcon.appiconset`) est vide : ajoutez une image
   1024×1024 avant une éventuelle publication sur l'App Store.
-- La mise à jour de statut appelle
-  `PATCH /workbook/tables/{table}/rows/itemAt(index=N)` avec les valeurs
-  complètes de la ligne. Ce comportement est basé sur la documentation
-  officielle de l'API Excel de Microsoft Graph ; vérifiez-le en conditions
-  réelles (Graph Explorer ou test sur device) lors du premier déploiement,
-  l'API Graph évoluant parfois.
+- Le fichier JSON est réécrit intégralement à chaque modification (pas de
+  mise à jour partielle) : au-delà de quelques Mo (plusieurs milliers de
+  demandes avec historique complet), il faudrait passer à l'API de session
+  d'upload de Microsoft Graph plutôt qu'au simple `PUT .../content` utilisé
+  ici — largement suffisant pour l'usage actuel.

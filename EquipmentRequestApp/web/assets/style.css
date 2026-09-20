@@ -1,0 +1,218 @@
+:root {
+  --bg: #f4f5f7;
+  --card-bg: #ffffff;
+  --text: #1c1c1e;
+  --text-secondary: #6b7075;
+  --border: #e0e2e6;
+  --accent: #0a66c2;
+  --accent-contrast: #ffffff;
+  --danger: #c0392b;
+  --success: #1e7e34;
+  --warning: #b8860b;
+  --radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --card-bg: #1f2227;
+    --text: #f0f1f3;
+    --text-secondary: #9a9fa6;
+    --border: #33373d;
+    --accent: #4c9aff;
+    --accent-contrast: #0b1220;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 24px 16px 64px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.4;
+}
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+header.app-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+header.app-header h1 {
+  font-size: 1.4rem;
+  margin: 0 0 4px;
+}
+
+header.app-header p {
+  color: var(--text-secondary);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 1.05rem;
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 14px 0 4px;
+}
+
+label:first-child { margin-top: 0; }
+
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+select,
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+textarea { resize: vertical; min-height: 80px; }
+
+.hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 18px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+button.primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  width: 100%;
+  margin-top: 18px;
+}
+
+button.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  width: 100%;
+  margin-top: 10px;
+}
+
+button.link {
+  background: none;
+  color: var(--accent);
+  padding: 4px 0;
+  font-weight: 500;
+}
+
+.status-message {
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  margin-bottom: 16px;
+}
+
+.status-message.error {
+  background: rgba(192, 57, 43, 0.12);
+  color: var(--danger);
+}
+
+.status-message.success {
+  background: rgba(30, 126, 52, 0.12);
+  color: var(--success);
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge.pending { background: rgba(184, 134, 11, 0.15); color: var(--warning); }
+.badge.inprogress { background: rgba(10, 102, 194, 0.15); color: var(--accent); }
+.badge.processed { background: rgba(30, 126, 52, 0.15); color: var(--success); }
+.badge.rejected { background: rgba(192, 57, 43, 0.15); color: var(--danger); }
+
+.request-list { list-style: none; padding: 0; margin: 0; }
+
+.request-list li {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 0;
+  cursor: pointer;
+}
+
+.request-list li:last-child { border-bottom: none; }
+
+.request-list .title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.request-list .title-row strong { font-size: 0.98rem; }
+.request-list .meta { color: var(--text-secondary); font-size: 0.85rem; margin-top: 2px; }
+
+.field-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.field-row:last-child { border-bottom: none; }
+.field-row .field-label { color: var(--text-secondary); }
+.field-row .field-value { text-align: right; max-width: 60%; }
+
+.empty-state {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 40px 16px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+[hidden] { display: none !important; }

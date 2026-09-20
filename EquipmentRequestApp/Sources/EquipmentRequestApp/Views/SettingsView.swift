@@ -46,16 +46,13 @@ struct SettingsView: View {
                     TextField("Base du lecteur (ex: /me/drive)", text: $config.driveBasePath)
                         .textInputAutocapitalization(.never)
                         .disableAutocorrection(true)
-                    TextField("Chemin du fichier .xlsx", text: $config.excelFilePath)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                    TextField("Nom du tableau Excel", text: $config.tableName)
+                    TextField("Chemin du fichier .json", text: $config.jsonFilePath)
                         .textInputAutocapitalization(.never)
                         .disableAutocorrection(true)
                 } header: {
-                    Text("Fichier Excel (OneDrive / SharePoint)")
+                    Text("Fichier des demandes (OneDrive / SharePoint)")
                 } footer: {
-                    Text("Le fichier doit déjà exister et contenir un tableau nommé ci-dessus, avec au minimum les colonnes Nom_Demandeur, Mail_Demandeur, Pour_Qui, Materiel, Statut et Observations (voir le README pour la liste complète et les variantes de noms acceptées).")
+                    Text("Le même fichier JSON que celui utilisé par les pages web. S'il n'existe pas encore, il est créé automatiquement lors du premier enregistrement.")
                 }
 
                 Section {

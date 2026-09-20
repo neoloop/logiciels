@@ -9,8 +9,7 @@ final class AppConfig: ObservableObject {
         static let clientId = "config.clientId"
         static let tenantId = "config.tenantId"
         static let driveBasePath = "config.driveBasePath"
-        static let excelFilePath = "config.excelFilePath"
-        static let tableName = "config.tableName"
+        static let jsonFilePath = "config.jsonFilePath"
         static let validatorEmail = "config.validatorEmail"
         static let validatorName = "config.validatorName"
     }
@@ -31,14 +30,10 @@ final class AppConfig: ObservableObject {
         didSet { UserDefaults.standard.set(driveBasePath, forKey: Keys.driveBasePath) }
     }
 
-    /// Chemin du fichier .xlsx dans le lecteur, ex: "Suivi_Demandes_Materiel_SIS2B.xlsx".
-    @Published var excelFilePath: String {
-        didSet { UserDefaults.standard.set(excelFilePath, forKey: Keys.excelFilePath) }
-    }
-
-    /// Nom du tableau Excel (Insertion > Tableau) dans la feuille, ex: "Demandes_Materiel".
-    @Published var tableName: String {
-        didSet { UserDefaults.standard.set(tableName, forKey: Keys.tableName) }
+    /// Chemin du fichier .json dans le lecteur, ex: "Suivi_Demandes_Materiel_SIS2B.json".
+    /// C'est le même fichier que celui lu/écrit par les pages web.
+    @Published var jsonFilePath: String {
+        didSet { UserDefaults.standard.set(jsonFilePath, forKey: Keys.jsonFilePath) }
     }
 
     /// Email du valideur (vous) : mis en copie du mail envoyé et destinataire du retour signé.
@@ -56,11 +51,11 @@ final class AppConfig: ObservableObject {
         "msauth.\(Bundle.main.bundleIdentifier ?? "com.example.EquipmentRequestApp")://auth"
     }
 
-    /// Scopes Microsoft Graph nécessaires pour lire/écrire le classeur Excel sur OneDrive/SharePoint.
+    /// Scopes Microsoft Graph nécessaires pour lire/écrire le fichier JSON sur OneDrive/SharePoint.
     let graphScopes = ["Files.ReadWrite", "Sites.ReadWrite.All"]
 
     var isConfigured: Bool {
-        !clientId.isEmpty && !tenantId.isEmpty && !excelFilePath.isEmpty && !tableName.isEmpty
+        !clientId.isEmpty && !tenantId.isEmpty && !jsonFilePath.isEmpty
             && clientId != "REMPLACER-PAR-VOTRE-CLIENT-ID"
     }
 
@@ -69,8 +64,7 @@ final class AppConfig: ObservableObject {
         clientId = defaults.string(forKey: Keys.clientId) ?? "REMPLACER-PAR-VOTRE-CLIENT-ID"
         tenantId = defaults.string(forKey: Keys.tenantId) ?? "REMPLACER-PAR-VOTRE-TENANT-ID"
         driveBasePath = defaults.string(forKey: Keys.driveBasePath) ?? "/me/drive"
-        excelFilePath = defaults.string(forKey: Keys.excelFilePath) ?? "Suivi_Demandes_Materiel_SIS2B.xlsx"
-        tableName = defaults.string(forKey: Keys.tableName) ?? "Demandes_Materiel"
+        jsonFilePath = defaults.string(forKey: Keys.jsonFilePath) ?? "Suivi_Demandes_Materiel_SIS2B.json"
         validatorEmail = defaults.string(forKey: Keys.validatorEmail) ?? ""
         validatorName = defaults.string(forKey: Keys.validatorName) ?? ""
     }
