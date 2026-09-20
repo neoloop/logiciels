@@ -5,6 +5,7 @@ struct DiveListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Dive.date, order: .reverse) private var dives: [Dive]
     @State private var isPresentingNewDive = false
+    @State private var isPresentingImport = false
 
     private var upcomingDives: [Dive] {
         let calendar = Calendar.current
@@ -79,16 +80,30 @@ struct DiveListView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        isPresentingNewDive = true
+                    Menu {
+                        Button {
+                            isPresentingNewDive = true
+                        } label: {
+                            Label("Nouvelle plongée", systemImage: "plus")
+                        }
+                        Button {
+                            isPresentingImport = true
+                        } label: {
+                            Label("Importer un programme", systemImage: "text.badge.plus")
+                        }
                     } label: {
-                        Label("Ajouter", systemImage: "plus")
+                        Image(systemName: "plus")
                     }
                 }
             }
             .sheet(isPresented: $isPresentingNewDive) {
                 NavigationStack {
                     DiveFormView(dive: nil)
+                }
+            }
+            .sheet(isPresented: $isPresentingImport) {
+                NavigationStack {
+                    ImportProgramView()
                 }
             }
         }
