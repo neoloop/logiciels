@@ -6,7 +6,7 @@ import {
   deleteOAuthTokens,
 } from "@/lib/db";
 import { refreshGraphAccessToken, InvalidGrantError } from "@/lib/graph-auth";
-import { runSyncForUser } from "@/lib/sync-service";
+import { checkRepliesForTrackedEmails } from "@/lib/sync-service";
 
 const TICK_MS = 5 * 60 * 1000; // fréquence de vérification ; chaque utilisateur garde son propre intervalle
 const ACCESS_TOKEN_EXPIRY_BUFFER_MS = 2 * 60 * 1000;
@@ -59,9 +59,9 @@ async function runBackgroundSyncCycle() {
       const accessToken = await getUsableAccessToken(userEmail);
       if (!accessToken) continue;
 
-      const result = await runSyncForUser(userEmail, accessToken);
+      const result = await checkRepliesForTrackedEmails(userEmail, accessToken);
       console.log(
-        `Sync en arrière-plan pour ${userEmail}: ${result.synced} mail(s) importé(s), ${result.repliesFound} réponse(s) détectée(s).`
+        `Sync en arrière-plan pour ${userEmail}: ${result.checked} mail(s) suivi(s) vérifié(s), ${result.repliesFound} réponse(s) détectée(s).`
       );
     } catch (error) {
       console.error(`Sync en arrière-plan: erreur pour ${userEmail}`, error);

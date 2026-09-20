@@ -42,7 +42,7 @@ db.exec(`
   );
 `);
 
-export type EmailStatus = "waiting" | "replied" | "dismissed";
+export type EmailStatus = "waiting" | "replied";
 
 export interface TrackedEmail {
   id: string;
@@ -105,10 +105,15 @@ export function markReplied(id: string, userEmail: string, repliedAt: string) {
   ).run({ id, userEmail, repliedAt });
 }
 
-export function dismissEmail(id: string, userEmail: string) {
-  db.prepare(
-    `UPDATE tracked_emails SET status = 'dismissed' WHERE id = @id AND user_email = @userEmail`
-  ).run({ id, userEmail });
+export function untrackEmail(id: string, userEmail: string) {
+  db.prepare(`DELETE FROM tracked_emails WHERE id = @id AND user_email = @userEmail`).run({
+    id,
+    userEmail,
+  });
+}
+
+export function isTracked(id: string, userEmail: string): boolean {
+  return Boolean(getTrackedEmail(id, userEmail));
 }
 
 export function recordFollowUp(id: string, userEmail: string, at: string) {

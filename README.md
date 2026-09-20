@@ -5,10 +5,12 @@
 Application web locale (Next.js) qui se connecte à ta boîte Microsoft 365 via
 Microsoft Graph pour :
 
-- lister tes mails envoyés récemment,
+- te montrer tes mails envoyés récemment et te laisser **choisir lesquels
+  suivre** (rien n'est suivi automatiquement),
 - détecter automatiquement si tu as reçu une réponse dans la même conversation,
+  pour chaque mail que tu as choisi de suivre,
 - te signaler ceux restés sans réponse après un délai configurable,
-- se **synchroniser tout seul à intervalle régulier**, tant que l'application
+- **vérifier ça tout seul à intervalle régulier**, tant que l'application
   tourne (même onglet fermé),
 - te permettre de créer en un clic un **brouillon** de relance (jamais d'envoi
   automatique : tu relis et tu envoies toi-même depuis Outlook).
@@ -66,30 +68,33 @@ npm run dev
 ```
 
 Ouvre [http://localhost:3000](http://localhost:3000), connecte-toi avec ton
-compte Microsoft 365, puis clique sur **Synchroniser avec Outlook**.
+compte Microsoft 365, puis clique sur **Choisir des mails à suivre**.
 
 ### Comment ça marche
 
-- La synchronisation récupère tes 50 derniers mails envoyés
-  (`SentItems`), les enregistre dans la base locale.
-- Pour chaque mail encore "en attente", l'app interroge ton dossier
+- **Choisir des mails à suivre** liste tes 50 derniers mails envoyés
+  (`SentItems`) directement depuis Outlook — rien n'est enregistré tant que
+  tu ne cliques pas sur **Suivre** en face d'un mail.
+- Pour chaque mail suivi encore "en attente", l'app interroge ton dossier
   `Inbox` filtré sur le même `conversationId` : si un message y est arrivé,
   le mail est marqué **Répondu**.
-- Un mail sans réponse après le délai configuré (3 jours par défaut,
+- Un mail suivi sans réponse après le délai configuré (3 jours par défaut,
   modifiable dans l'interface) passe au statut **À relancer**.
 - Le bouton **Relancer** crée un brouillon de réponse (via l'action Graph
   `createReply`) pré-rempli avec un message de relance, et l'ouvre dans
   Outlook Web pour que tu le relises et l'envoies toi-même.
+- **Ne plus suivre** retire un mail du suivi (il redevient disponible dans
+  la liste des mails envoyés récents si tu veux le re-suivre plus tard).
 
-### Synchronisation automatique
+### Vérification automatique des réponses
 
-Un menu déroulant dans l'interface ("Synchro automatique") permet de choisir
+Un menu déroulant dans l'interface ("Vérif. automatique") permet de choisir
 un intervalle (15 min / 30 min / 1 h / 2 h / 4 h, ou désactivé). Tant que le
 serveur Next.js tourne (`npm run dev` ou `npm start`), un job en arrière-plan
 vérifie toutes les 5 minutes si l'un des utilisateurs connectés est dû pour
-une synchro, et l'exécute automatiquement — sans que le navigateur ait besoin
-d'être ouvert. La page se recharge elle-même toutes les 60 secondes pour
-afficher les résultats.
+une vérification, et regarde s'il y a des réponses aux mails **déjà
+suivis** — il n'ajoute jamais de nouveaux mails au suivi tout seul. La page
+se recharge elle-même toutes les 60 secondes pour afficher les résultats.
 
 Pour que ça fonctionne sans être reconnecté en permanence, le token de
 rafraîchissement Microsoft (obtenu après ta connexion) est conservé dans la

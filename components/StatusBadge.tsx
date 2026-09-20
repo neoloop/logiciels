@@ -4,7 +4,6 @@ const LABELS: Record<DisplayStatus, { text: string; classes: string }> = {
   replied: { text: "Répondu", classes: "bg-emerald-100 text-emerald-800" },
   needs_follow_up: { text: "À relancer", classes: "bg-amber-100 text-amber-800" },
   waiting: { text: "En attente", classes: "bg-slate-100 text-slate-700" },
-  dismissed: { text: "Ignoré", classes: "bg-slate-100 text-slate-400" },
 };
 
 export default function StatusBadge({ status }: { status: DisplayStatus }) {

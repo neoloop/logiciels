@@ -1,14 +1,34 @@
 import { getGraphClient, GraphMessage, escapeODataLiteral, runWithConcurrency } from "@/lib/graph";
-import { upsertTrackedEmail, listTrackedEmails, markReplied, touchLastSyncedAt } from "@/lib/db";
+import { listTrackedEmails, markReplied, touchLastSyncedAt } from "@/lib/db";
 
-export interface SyncResult {
-  synced: number;
-  checked: number;
-  repliesFound: number;
+export interface SentMessageSummary {
+  id: string;
+  conversationId: string;
+  subject: string | null;
+  toRecipients: string[];
+  sentAt: string;
+  webLink: string | null;
 }
 
-/** Fetches recently sent mail, records it, and checks the Inbox for replies to anything still "waiting". */
-export async function runSyncForUser(userEmail: string, accessToken: string): Promise<SyncResult> {
+function toSummary(message: GraphMessage): SentMessageSummary | null {
+  const toRecipients = (message.toRecipients ?? [])
+    .map((r) => r.emailAddress?.address)
+    .filter((addr): addr is string => Boolean(addr));
+
+  if (toRecipients.length === 0 || !message.sentDateTime) return null;
+
+  return {
+    id: message.id,
+    conversationId: message.conversationId,
+    subject: message.subject ?? null,
+    toRecipients,
+    sentAt: message.sentDateTime,
+    webLink: message.webLink ?? null,
+  };
+}
+
+/** Mails envoyés récemment, pour laisser l'utilisateur choisir lesquels suivre. Ne touche pas la base. */
+export async function fetchRecentSentMessages(accessToken: string): Promise<SentMessageSummary[]> {
   const client = getGraphClient(accessToken);
 
   const sentResult = await client
@@ -19,27 +39,34 @@ export async function runSyncForUser(userEmail: string, accessToken: string): Pr
     .get();
 
   const sentMessages: GraphMessage[] = sentResult.value ?? [];
-  let syncedCount = 0;
+  return sentMessages.map(toSummary).filter((m): m is SentMessageSummary => m !== null);
+}
 
-  for (const message of sentMessages) {
-    const toRecipients = (message.toRecipients ?? [])
-      .map((r) => r.emailAddress?.address)
-      .filter((addr): addr is string => Boolean(addr));
+/** Récupère un mail précis depuis Graph pour l'ajouter au suivi (choix explicite de l'utilisateur). */
+export async function fetchSentMessageById(
+  accessToken: string,
+  messageId: string
+): Promise<SentMessageSummary | null> {
+  const client = getGraphClient(accessToken);
+  const message: GraphMessage = await client
+    .api(`/me/messages/${messageId}`)
+    .select("id,conversationId,subject,toRecipients,sentDateTime,webLink")
+    .get();
 
-    if (toRecipients.length === 0 || !message.sentDateTime) continue;
+  return toSummary(message);
+}
 
-    upsertTrackedEmail({
-      id: message.id,
-      userEmail,
-      conversationId: message.conversationId,
-      subject: message.subject ?? null,
-      toRecipients,
-      sentAt: message.sentDateTime,
-      webLink: message.webLink ?? null,
-    });
-    syncedCount++;
-  }
+export interface ReplyCheckResult {
+  checked: number;
+  repliesFound: number;
+}
 
+/** Vérifie, pour chaque mail suivi encore "en attente", si une réponse est arrivée dans Inbox. */
+export async function checkRepliesForTrackedEmails(
+  userEmail: string,
+  accessToken: string
+): Promise<ReplyCheckResult> {
+  const client = getGraphClient(accessToken);
   const waiting = listTrackedEmails(userEmail).filter((e) => e.status === "waiting");
 
   let updatedCount = 0;
@@ -63,5 +90,5 @@ export async function runSyncForUser(userEmail: string, accessToken: string): Pr
 
   touchLastSyncedAt(userEmail, new Date().toISOString());
 
-  return { synced: syncedCount, checked: waiting.length, repliesFound: updatedCount };
+  return { checked: waiting.length, repliesFound: updatedCount };
 }
