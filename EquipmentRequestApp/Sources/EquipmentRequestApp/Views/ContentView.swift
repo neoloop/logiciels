@@ -3,8 +3,11 @@ import SwiftUI
 struct ContentView: View {
     var body: some View {
         TabView {
+            PendingRequestsView()
+                .tabItem { Label("À valider", systemImage: "checklist") }
+
             NewRequestView()
-                .tabItem { Label("Nouvelle demande", systemImage: "plus.circle") }
+                .tabItem { Label("Ajouter", systemImage: "plus.circle") }
 
             HistoryView()
                 .tabItem { Label("Historique", systemImage: "clock.arrow.circlepath") }

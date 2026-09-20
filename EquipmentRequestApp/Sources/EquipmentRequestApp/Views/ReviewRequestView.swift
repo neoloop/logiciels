@@ -116,7 +116,8 @@ struct ReviewRequestView: View {
 
         do {
             let token = try await authService.acquireToken(scopes: config.graphScopes)
-            try await excelService.addRow(request, accessToken: token, config: config)
+            let columnMap = try await excelService.fetchColumnMap(accessToken: token, config: config)
+            try await excelService.addRow(request, columnMap: columnMap, accessToken: token, config: config)
 
             let pdf = PDFGenerator.makeRequestPDF(for: request, validatorName: config.validatorName)
             self.pdfData = pdf

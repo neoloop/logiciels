@@ -1,21 +1,49 @@
 # Demandes de matériel — app iOS
 
-Application iOS (SwiftUI) qui permet de saisir une demande de matériel
-(ordinateur portable/fixe, téléphone, clé USB, autre), de la valider, puis
-automatiquement :
+Application iOS (SwiftUI) pour **valider les demandes de matériel** soumises
+par les employés de la société via un formulaire externe (Microsoft Forms,
+Power Apps, ou tout autre outil) qui alimente un tableau Excel stocké sur
+**OneDrive / SharePoint**.
 
-1. d'ajouter une ligne dans un tableau Excel stocké sur **OneDrive / SharePoint**
-   (via l'API Microsoft Graph, sans backend à héberger) ;
-2. de générer un **PDF** récapitulant la demande, avec une zone de signature ;
-3. d'ouvrir une fenêtre **Mail** pré-remplie (destinataire, sujet, corps, PDF en
-   pièce jointe) pour envoyer le PDF au bénéficiaire, qui le signe et le renvoie.
+Rôle principal de l'app : vous (le valideur) consultez la liste des demandes
+en attente, et pour chacune :
 
-L'app ne fait rien "en silence" : la validation écrit dans Excel, mais l'envoi
-du mail reste une action manuelle (l'utilisateur clique sur "Envoyer" dans la
+- **Valider** → l'app met à jour le statut dans le tableau Excel, génère un
+  **PDF** récapitulant la demande (avec zone de signature), puis ouvre une
+  fenêtre **Mail** pré-remplie (destinataire = bénéficiaire, copie =
+  demandeur + vous, PDF en pièce jointe) pour l'envoyer signer ;
+- **Refuser** → l'app met juste à jour le statut dans Excel, sans PDF ni mail.
+
+L'app permet aussi, en secondaire, d'ajouter vous-même une demande
+directement (déjà validée à la création) — utile si une demande vous arrive
+par un autre canal (oral, téléphone...).
+
+L'app ne fait rien "en silence" : la validation écrit dans Excel, mais
+l'envoi du mail reste une action manuelle (vous cliquez sur "Envoyer" dans la
 feuille Mail qui s'ouvre déjà remplie).
 
 Cette app est mono-utilisateur côté validation : une seule personne (vous)
-valide les demandes depuis l'app.
+valide les demandes depuis l'app. Les employés, eux, n'ont pas besoin de
+cette app : ils utilisent le formulaire externe.
+
+## Comment ça s'articule avec le formulaire des employés
+
+```
+Employé              Formulaire externe         Excel (OneDrive/SharePoint)         App iOS (vous)
+--------              -------------------         ----------------------------         ---------------
+Remplit le    ---->   Écrit une ligne      ---->  Nouvelle ligne, colonne      ---->   Onglet "À valider"
+formulaire            dans le tableau              Statut vide ("en attente")           liste la ligne
+                       Excel                                                            
+                                                                                        Vous appuyez sur
+                                                                                        Valider ou Refuser
+                                                    Colonne Statut mise à jour   <----   
+                                                    ("Validée" / "Refusée")
+```
+
+L'app ne crée pas elle-même le formulaire ni les colonnes Excel : c'est à
+vous (ou votre IT) de créer le formulaire et le tableau une fois (étape 2
+ci-dessous). N'importe quel outil peut alimenter le tableau tant qu'il écrit
+dans les bonnes colonnes.
 
 ## Prérequis
 
@@ -66,16 +94,40 @@ déclarer l'app dans Azure Portal :
 8. **Authentification** → activez **Flux de client public autorisés** (Allow
    public client flows) sur `Yes`.
 
-## 2. Préparer le fichier Excel
+## 2. Préparer le formulaire et le fichier Excel
+
+### 2.1 Le tableau Excel
 
 1. Créez (ou choisissez) un fichier `.xlsx` sur OneDrive ou dans une
    bibliothèque de documents SharePoint, par exemple :
    `Demandes/DemandesMateriel.xlsx`.
 2. Sur la première feuille, créez un **tableau** (onglet *Insertion* >
-   *Tableau*) avec exactement ces en-têtes de colonnes, dans cet ordre :
+   *Tableau*) avec au moins ces colonnes (l'ordre n'a pas d'importance, et
+   des colonnes supplémentaires — ex : ajoutées automatiquement par
+   Microsoft Forms comme "ID" ou "Heure de début" — ne posent aucun problème,
+   l'app les ignore) :
 
-   | Date | Demandeur | Email demandeur | Bénéficiaire | Email bénéficiaire | Matériel | Justification | Statut |
-   |------|-----------|------------------|--------------|---------------------|----------|----------------|--------|
+   | Demandeur | Email demandeur | Bénéficiaire | Email bénéficiaire | Matériel | Justification | Statut |
+   |-----------|------------------|--------------|---------------------|----------|----------------|--------|
+
+   Une colonne **Date** est optionnelle (l'app l'affiche si présente).
+
+   L'app reconnaît chaque colonne par son **intitulé** (insensible à la
+   casse et aux accents), avec plusieurs variantes acceptées :
+   - Demandeur : `Demandeur`, `Nom du demandeur`
+   - Email demandeur : `Email demandeur`, `E-mail demandeur`, `Mail demandeur`, `Email`
+   - Bénéficiaire : `Bénéficiaire`, `Nom du bénéficiaire`, `Pour qui`
+   - Email bénéficiaire : `Email bénéficiaire`, `E-mail bénéficiaire`, `Mail bénéficiaire`
+   - Matériel : `Matériel`, `Type de matériel`, `Équipement`
+   - Justification : `Justification`, `Motif`, `Raison`
+   - Statut : `Statut`, `Statut de la demande`, `État`
+   - Date : `Date`, `Date de la demande`, `Horodateur`, `Heure de début`
+
+   **Important** : la colonne **Statut** doit exister dans le tableau — c'est
+   elle que l'app met à jour ("Validée" / "Refusée") lors du traitement d'une
+   demande. Une case vide dans cette colonne est traitée comme "en attente".
+   Si votre formulaire ne la remplit pas automatiquement, laissez-la vide à
+   la création : c'est le comportement attendu.
 
 3. Nommez ce tableau (sélectionner le tableau → onglet *Tableau* > *Nom du
    tableau*), par exemple `DemandesMateriel`. C'est ce nom qu'il faudra
@@ -92,6 +144,24 @@ déclarer l'app dans Azure Portal :
      [Graph Explorer](https://developer.microsoft.com/graph/graph-explorer)) :
      `GET https://graph.microsoft.com/v1.0/sites/{hostname}:/sites/{nom-du-site}`
      et récupérez le champ `id`.
+
+### 2.2 Le formulaire des employés
+
+Créez le formulaire avec l'outil de votre choix (Microsoft Forms est le plus
+simple : dans l'onglet *Réponses*, activez *Ouvrir dans Excel* ou branchez un
+flux Power Automate pour écrire chaque réponse comme une nouvelle ligne du
+tableau créé à l'étape 2.1). Le formulaire doit demander :
+
+- Nom et email du demandeur (la personne qui fait la demande),
+- Nom et email du bénéficiaire (la personne pour qui est le matériel),
+- Type de matériel (ordinateur portable/fixe, téléphone, clé USB, autre),
+- Justification de la demande.
+
+Assurez-vous que chaque réponse crée une ligne dans le **même tableau**
+Excel (pas juste dans la feuille en dessous : dans Excel, une nouvelle ligne
+ajoutée juste sous un tableau n'en fait automatiquement partie que si
+l'option d'extension automatique du tableau est activée — vérifiez-le après
+un premier test).
 
 ## 3. Générer et ouvrir le projet Xcode
 
@@ -120,7 +190,7 @@ Dans l'onglet **Réglages** de l'app :
 
 1. **Client ID** et **Tenant ID** : collez les valeurs notées à l'étape 1.
 2. **Base du lecteur**, **chemin du fichier .xlsx**, **nom du tableau** :
-   valeurs de l'étape 2.
+   valeurs de l'étape 2.1.
 3. **Votre nom** / **Votre email** : utilisés en copie du mail envoyé et comme
    destinataire indiqué pour le retour du document signé.
 4. Bouton **Se connecter à Microsoft 365** : une fenêtre de connexion
@@ -129,25 +199,37 @@ Dans l'onglet **Réglages** de l'app :
 
 ## 5. Utiliser l'app
 
-1. Onglet **Nouvelle demande** : renseignez le demandeur, le bénéficiaire,
-   le type de matériel et la justification, puis **Continuer**.
-2. Écran de vérification : relisez, puis **Valider la demande**.
-   - L'app se connecte à Microsoft Graph (silencieusement si déjà connecté),
-     ajoute une ligne au tableau Excel, génère le PDF.
-   - La feuille **Mail** s'ouvre, pré-remplie avec le PDF en pièce jointe,
-     adressée au bénéficiaire (avec le demandeur et vous en copie). Vérifiez
-     et appuyez sur **Envoyer**.
-3. Le bénéficiaire signe le PDF (à la main après impression, ou en l'annotant
-   directement dans l'app Mail/Fichiers avec l'outil Marqueur) et vous le
-   renvoie par retour de mail.
-4. Onglet **Historique** : liste les demandes déjà enregistrées, relues
-   directement depuis le tableau Excel (tirez vers le bas pour rafraîchir).
+1. Onglet **À valider** (écran principal) : liste toutes les lignes du
+   tableau Excel dont le statut n'est ni "Validée" ni "Refusée". Tirez vers
+   le bas pour rafraîchir après qu'un employé a soumis une nouvelle demande.
+2. Touchez une demande pour voir son détail, puis :
+   - **Valider la demande** → l'app écrit "Validée" dans Excel, génère le
+     PDF, puis ouvre la feuille **Mail** pré-remplie (PDF en pièce jointe,
+     adressée au bénéficiaire, avec le demandeur et vous en copie).
+     Vérifiez et appuyez sur **Envoyer**.
+   - **Refuser la demande** → confirmation, puis l'app écrit "Refusée" dans
+     Excel. Aucun mail n'est envoyé.
+3. Le bénéficiaire signe le PDF reçu (à la main après impression, ou en
+   l'annotant directement dans l'app Mail/Fichiers avec l'outil Marqueur) et
+   vous le renvoie par retour de mail.
+4. Onglet **Ajouter** : pour saisir vous-même une demande reçue par un autre
+   canal (elle est directement enregistrée comme "Validée").
+5. Onglet **Historique** : liste toutes les demandes (en attente, validées,
+   refusées) avec leur statut, relues directement depuis le tableau Excel.
 
 ## Notes techniques
 
 - Aucun backend n'est nécessaire : l'app appelle directement l'API Microsoft
-  Graph (`workbook/tables/.../rows/add`) pour écrire dans le classeur Excel
-  tel quel — le fichier reste ouvrable normalement dans Excel/Office en ligne.
+  Graph (`workbook/tables/...`) pour lire et écrire dans le classeur Excel
+  tel quel — le fichier reste ouvrable normalement dans Excel/Office en ligne,
+  et peut être alimenté par n'importe quel outil externe (formulaire, script,
+  saisie manuelle).
+- Les colonnes sont identifiées par leur **nom d'en-tête**, pas par position :
+  l'app est donc tolérante à l'ordre des colonnes et à des colonnes
+  supplémentaires que le formulaire externe pourrait ajouter.
+- Mettre à jour le statut d'une ligne renvoie l'intégralité de ses valeurs à
+  Microsoft Graph (colonne Statut modifiée, le reste inchangé), afin de ne
+  perdre aucune donnée saisie par le formulaire externe.
 - L'authentification utilise [MSAL pour iOS](https://github.com/AzureAD/microsoft-authentication-library-for-objc),
   la librairie officielle Microsoft, installée via Swift Package Manager
   (déclarée dans `project.yml`).
@@ -157,8 +239,7 @@ Dans l'onglet **Réglages** de l'app :
   Mail déjà configuré sur l'iPhone (Exchange, iCloud, Gmail…), aucune
   configuration SMTP supplémentaire n'est nécessaire côté app. Si aucun
   compte Mail n'est configuré sur l'appareil, l'app avertit que la demande a
-  bien été enregistrée dans Excel mais qu'il faudra renvoyer le PDF
-  manuellement.
+  bien été validée dans Excel mais qu'il faudra renvoyer le PDF manuellement.
 
 ## Limites connues / pistes d'amélioration
 
@@ -166,8 +247,17 @@ Dans l'onglet **Réglages** de l'app :
   l'app, il faudrait ajouter une notion de rôle/compte (actuellement tout
   utilisateur connecté avec les bons droits Graph peut valider).
 - Pas de suivi de statut "signé/retourné" : le retour du PDF signé se fait
-  par mail classique, il n'est pas réimporté automatiquement dans Excel. Cela
-  pourrait être ajouté en écoutant les mails entrants (ex: via Microsoft
-  Graph `mail` API) ou en ajoutant un champ "Statut" à cocher manuellement.
+  par mail classique, il n'est pas réimporté automatiquement dans Excel.
+  Cela pourrait être ajouté en écoutant les mails entrants (ex: via
+  Microsoft Graph `mail` API) ou avec une colonne de statut supplémentaire à
+  cocher manuellement.
+- Pas de notification push quand une nouvelle demande arrive : il faut ouvrir
+  l'app et tirer pour rafraîchir l'onglet "À valider".
 - L'icône d'application (`AppIcon.appiconset`) est vide : ajoutez une image
   1024×1024 avant une éventuelle publication sur l'App Store.
+- La mise à jour de statut appelle
+  `PATCH /workbook/tables/{table}/rows/itemAt(index=N)` avec les valeurs
+  complètes de la ligne. Ce comportement est basé sur la documentation
+  officielle de l'API Excel de Microsoft Graph ; vérifiez-le en conditions
+  réelles (Graph Explorer ou test sur device) lors du premier déploiement,
+  l'API Graph évoluant parfois.

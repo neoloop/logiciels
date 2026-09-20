@@ -21,6 +21,12 @@ struct EquipmentRequest: Identifiable, Codable {
     var equipmentOtherDetail: String
     var justification: String
 
+    /// Quand la demande provient d'une ligne Excel (créée par le formulaire des
+    /// employés), le libellé de matériel est du texte libre qui ne correspond pas
+    /// forcément à un cas d'EquipmentType : on le stocke tel quel plutôt que
+    /// d'essayer de le faire rentrer dans l'enum.
+    var equipmentLabelOverride: String?
+
     init(
         id: UUID = UUID(),
         date: Date = Date(),
@@ -30,7 +36,8 @@ struct EquipmentRequest: Identifiable, Codable {
         beneficiaryEmail: String = "",
         equipmentType: EquipmentType = .laptop,
         equipmentOtherDetail: String = "",
-        justification: String = ""
+        justification: String = "",
+        equipmentLabelOverride: String? = nil
     ) {
         self.id = id
         self.date = date
@@ -41,10 +48,14 @@ struct EquipmentRequest: Identifiable, Codable {
         self.equipmentType = equipmentType
         self.equipmentOtherDetail = equipmentOtherDetail
         self.justification = justification
+        self.equipmentLabelOverride = equipmentLabelOverride
     }
 
     /// Libellé du matériel affiché et écrit dans Excel (inclut le détail si "Autre").
     var equipmentLabel: String {
+        if let equipmentLabelOverride, !equipmentLabelOverride.isEmpty {
+            return equipmentLabelOverride
+        }
         if equipmentType == .other, !equipmentOtherDetail.trimmingCharacters(in: .whitespaces).isEmpty {
             return "Autre : \(equipmentOtherDetail)"
         }
@@ -66,21 +77,6 @@ struct EquipmentRequest: Identifiable, Codable {
         formatter.locale = Locale(identifier: "fr_FR")
         return formatter
     }()
-
-    /// La ligne, dans l'ordre des colonnes attendues par le tableau Excel "DemandesMateriel".
-    /// Voir EquipmentRequestApp/README.md pour l'ordre exact des colonnes à créer.
-    var excelRow: [String] {
-        [
-            Self.dateFormatter.string(from: date),
-            requesterName,
-            requesterEmail,
-            beneficiaryName,
-            beneficiaryEmail,
-            equipmentLabel,
-            justification,
-            "Validée"
-        ]
-    }
 }
 
 extension String {
