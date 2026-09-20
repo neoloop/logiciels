@@ -1,22 +1,23 @@
 # Demandes de matériel — app iOS
 
 Application iOS (SwiftUI) pour **valider les demandes de matériel** soumises
-par les employés de la société via un formulaire externe (Microsoft Forms,
-Power Apps, ou tout autre outil) qui alimente un tableau Excel stocké sur
-**OneDrive / SharePoint**.
+par les employés de la société, actuellement via un mail structuré traité par
+un flux **Power Automate** qui alimente le tableau `Demandes_Materiel` du
+classeur Excel `Suivi_Demandes_Materiel_SIS2B.xlsx` sur **OneDrive /
+SharePoint**.
 
 Rôle principal de l'app : vous (le valideur) consultez la liste des demandes
 en attente, et pour chacune :
 
-- **Valider** → l'app met à jour le statut dans le tableau Excel, génère un
+- **Valider** → l'app écrit le statut `Traité` dans le tableau Excel, génère un
   **PDF** récapitulant la demande (avec zone de signature), puis ouvre une
   fenêtre **Mail** pré-remplie (destinataire = bénéficiaire, copie =
   demandeur + vous, PDF en pièce jointe) pour l'envoyer signer ;
-- **Refuser** → l'app met juste à jour le statut dans Excel, sans PDF ni mail.
+- **Refuser** → l'app écrit le statut `Refusée` dans Excel, sans PDF ni mail.
 
 L'app permet aussi, en secondaire, d'ajouter vous-même une demande
-directement (déjà validée à la création) — utile si une demande vous arrive
-par un autre canal (oral, téléphone...).
+directement (déjà marquée `Traité` à la création) — utile si une demande vous
+arrive par un autre canal (oral, téléphone...).
 
 L'app ne fait rien "en silence" : la validation écrit dans Excel, mais
 l'envoi du mail reste une action manuelle (vous cliquez sur "Envoyer" dans la
@@ -24,26 +25,29 @@ feuille Mail qui s'ouvre déjà remplie).
 
 Cette app est mono-utilisateur côté validation : une seule personne (vous)
 valide les demandes depuis l'app. Les employés, eux, n'ont pas besoin de
-cette app : ils utilisent le formulaire externe.
+cette app : ils utilisent le circuit existant (mail structuré → Power
+Automate → Excel).
 
-## Comment ça s'articule avec le formulaire des employés
+## Comment ça s'articule avec le circuit existant
 
 ```
-Employé              Formulaire externe         Excel (OneDrive/SharePoint)         App iOS (vous)
---------              -------------------         ----------------------------         ---------------
-Remplit le    ---->   Écrit une ligne      ---->  Nouvelle ligne, colonne      ---->   Onglet "À valider"
-formulaire            dans le tableau              Statut vide ("en attente")           liste la ligne
-                       Excel                                                            
-                                                                                        Vous appuyez sur
-                                                                                        Valider ou Refuser
-                                                    Colonne Statut mise à jour   <----   
-                                                    ("Validée" / "Refusée")
+Employé          Mail structuré        Power Automate        Excel (OneDrive)          App iOS (vous)
+-------          --------------        --------------        ----------------          ---------------
+Envoie un   ---> "Clé=valeur|..."  --> Parse le mail    ---> Nouvelle ligne dans   ---> Onglet "À valider"
+mail selon       dans le corps          et ajoute une         Demandes_Materiel,         liste la ligne
+le format                              ligne au tableau       colonne Statut vide         (statut vide)
+attendu                                                       ("en attente")
+                                                                                          Vous appuyez sur
+                                                                                          Valider ou Refuser
+                                                                Colonne Statut mise  <---
+                                                                à jour ("Traité" /
+                                                                "Refusée")
 ```
 
-L'app ne crée pas elle-même le formulaire ni les colonnes Excel : c'est à
-vous (ou votre IT) de créer le formulaire et le tableau une fois (étape 2
-ci-dessous). N'importe quel outil peut alimenter le tableau tant qu'il écrit
-dans les bonnes colonnes.
+L'app ne remplace pas ce circuit existant : elle se branche dessus en lisant
+et en mettant à jour le même tableau Excel. Si votre flux Power Automate
+change, seuls les noms de colonnes doivent rester cohérents avec ceux listés
+ci-dessous (l'app les identifie par nom, pas par position).
 
 ## Prérequis
 
@@ -94,74 +98,79 @@ déclarer l'app dans Azure Portal :
 8. **Authentification** → activez **Flux de client public autorisés** (Allow
    public client flows) sur `Yes`.
 
-## 2. Préparer le formulaire et le fichier Excel
+## 2. Le tableau Excel `Demandes_Materiel`
 
-### 2.1 Le tableau Excel
+D'après le fichier `Suivi_Demandes_Materiel_SIS2B.xlsx` déjà en usage :
+classeur avec deux feuilles ("Demandes" et "Statistiques"), et un tableau
+nommé **`Demandes_Materiel`** sur la feuille "Demandes" avec ces colonnes :
 
-1. Créez (ou choisissez) un fichier `.xlsx` sur OneDrive ou dans une
-   bibliothèque de documents SharePoint, par exemple :
-   `Demandes/DemandesMateriel.xlsx`.
-2. Sur la première feuille, créez un **tableau** (onglet *Insertion* >
-   *Tableau*) avec au moins ces colonnes (l'ordre n'a pas d'importance, et
-   des colonnes supplémentaires — ex : ajoutées automatiquement par
-   Microsoft Forms comme "ID" ou "Heure de début" — ne posent aucun problème,
-   l'app les ignore) :
+| Colonne Excel | Rôle dans l'app |
+|---|---|
+| `Reference` | Référence de la demande (ex : objet du mail reçu), affichée dans le détail et le PDF |
+| `Date` | Date de la demande |
+| `Groupement` | Service/groupement du demandeur, affiché dans le détail et le PDF |
+| `Nom_Demandeur` | Nom du demandeur |
+| `Mail_Demandeur` | Email du demandeur (copie du mail envoyé) |
+| `Pour_Qui` | Nom du bénéficiaire |
+| `Telephone` | Téléphone (affiché dans le détail et le PDF) |
+| `Materiel` | Type de matériel demandé |
+| `Logiciels` | Logiciels associés, affichés dans le détail et le PDF |
+| `Opportunite` | Référence commerciale/projet associée, affichée dans le détail et le PDF |
+| `Statut` | **En attente** / **En cours** / **Traité** / **Refusée** — mise à jour par l'app |
+| `Date_Reception` | Non modifiée par l'app (réservée à un usage manuel ou futur) |
+| `Observations` | Utilisé comme justification de la demande, affichée dans le détail et le PDF |
 
-   | Demandeur | Email demandeur | Bénéficiaire | Email bénéficiaire | Matériel | Justification | Statut |
-   |-----------|------------------|--------------|---------------------|----------|----------------|--------|
+L'app identifie chaque colonne par son **intitulé exact** ci-dessus, avec
+quelques synonymes acceptés en secours (insensible à la casse et aux
+accents) — voir `Sources/EquipmentRequestApp/Models/ColumnMap.swift` pour la
+liste complète. Des colonnes supplémentaires ne posent aucun problème,
+l'app les ignore simplement.
 
-   Une colonne **Date** est optionnelle (l'app l'affiche si présente).
+### ⚠️ Colonne manquante à ajouter : `Mail_Pour_Qui`
 
-   L'app reconnaît chaque colonne par son **intitulé** (insensible à la
-   casse et aux accents), avec plusieurs variantes acceptées :
-   - Demandeur : `Demandeur`, `Nom du demandeur`
-   - Email demandeur : `Email demandeur`, `E-mail demandeur`, `Mail demandeur`, `Email`
-   - Bénéficiaire : `Bénéficiaire`, `Nom du bénéficiaire`, `Pour qui`
-   - Email bénéficiaire : `Email bénéficiaire`, `E-mail bénéficiaire`, `Mail bénéficiaire`
-   - Matériel : `Matériel`, `Type de matériel`, `Équipement`
-   - Justification : `Justification`, `Motif`, `Raison`
-   - Statut : `Statut`, `Statut de la demande`, `État`
-   - Date : `Date`, `Date de la demande`, `Horodateur`, `Heure de début`
+Le tableau actuel ne contient **pas** l'email du bénéficiaire (`Pour_Qui`
+n'est qu'un nom), pourtant nécessaire pour lui envoyer le PDF à signer.
+Deux choses à faire :
 
-   **Important** : la colonne **Statut** doit exister dans le tableau — c'est
-   elle que l'app met à jour ("Validée" / "Refusée") lors du traitement d'une
-   demande. Une case vide dans cette colonne est traitée comme "en attente".
-   Si votre formulaire ne la remplit pas automatiquement, laissez-la vide à
-   la création : c'est le comportement attendu.
+1. **Ajoutez une colonne `Mail_Pour_Qui`** au tableau Excel (et si possible
+   au flux Power Automate / format de mail attendu, pour qu'elle soit
+   renseignée automatiquement pour les nouvelles demandes).
+2. En attendant (ou pour les lignes créées avant cet ajout), l'écran de
+   validation de l'app affiche un champ **email du bénéficiaire éditable**,
+   pré-rempli si la colonne existe et est renseignée, modifiable sinon. La
+   valeur saisie est enregistrée dans la colonne `Mail_Pour_Qui` au moment de
+   la validation (si la colonne existe).
 
-3. Nommez ce tableau (sélectionner le tableau → onglet *Tableau* > *Nom du
-   tableau*), par exemple `DemandesMateriel`. C'est ce nom qu'il faudra
-   renseigner dans les Réglages de l'app.
-4. Notez le chemin du fichier tel qu'il apparaît dans le lecteur (relatif à la
-   racine du lecteur), par exemple `Demandes/DemandesMateriel.xlsx`.
+### Statut : cycle utilisé par l'app
 
-   - Si le fichier est dans **votre OneDrive personnel/entreprise** :
-     laissez `driveBasePath` = `/me/drive` dans les Réglages de l'app (valeur
-     par défaut).
-   - Si le fichier est sur un **site SharePoint** : il faut utiliser
-     `/sites/{site-id}/drive` comme `driveBasePath`. Pour trouver le
-     `site-id`, appelez (avec un compte ayant accès, via
-     [Graph Explorer](https://developer.microsoft.com/graph/graph-explorer)) :
-     `GET https://graph.microsoft.com/v1.0/sites/{hostname}:/sites/{nom-du-site}`
-     et récupérez le champ `id`.
+La feuille "Statistiques" du classeur montre que la colonne Statut utilise
+déjà 3 valeurs (`En attente`, `En cours`, `Traité`). Cette app utilise un
+cycle simplifié à la demande :
 
-### 2.2 Le formulaire des employés
+- Une ligne dont le Statut est vide ou différent de `Traité`/`Refusée` (donc
+  y compris `En attente` ou `En cours`) apparaît dans l'onglet **À valider**.
+- **Valider** fait passer le Statut directement à **`Traité`** (pas d'étape
+  intermédiaire `En cours` déclenchée par l'app).
+- **Refuser** fait passer le Statut à **`Refusée`** (valeur ajoutée par cette
+  app ; elle n'apparaît pas dans les compteurs existants de la feuille
+  Statistiques, mais ne les perturbe pas non plus).
 
-Créez le formulaire avec l'outil de votre choix (Microsoft Forms est le plus
-simple : dans l'onglet *Réponses*, activez *Ouvrir dans Excel* ou branchez un
-flux Power Automate pour écrire chaque réponse comme une nouvelle ligne du
-tableau créé à l'étape 2.1). Le formulaire doit demander :
+### Chemin du fichier
 
-- Nom et email du demandeur (la personne qui fait la demande),
-- Nom et email du bénéficiaire (la personne pour qui est le matériel),
-- Type de matériel (ordinateur portable/fixe, téléphone, clé USB, autre),
-- Justification de la demande.
+Notez le chemin du fichier tel qu'il apparaît dans le lecteur OneDrive/
+SharePoint (relatif à la racine du lecteur), par exemple
+`Suivi_Demandes_Materiel_SIS2B.xlsx` s'il est à la racine, ou
+`Dossier/Suivi_Demandes_Materiel_SIS2B.xlsx` sinon.
 
-Assurez-vous que chaque réponse crée une ligne dans le **même tableau**
-Excel (pas juste dans la feuille en dessous : dans Excel, une nouvelle ligne
-ajoutée juste sous un tableau n'en fait automatiquement partie que si
-l'option d'extension automatique du tableau est activée — vérifiez-le après
-un premier test).
+- Si le fichier est dans **votre OneDrive personnel/entreprise** :
+  laissez `driveBasePath` = `/me/drive` dans les Réglages de l'app (valeur
+  par défaut).
+- Si le fichier est sur un **site SharePoint** : il faut utiliser
+  `/sites/{site-id}/drive` comme `driveBasePath`. Pour trouver le
+  `site-id`, appelez (avec un compte ayant accès, via
+  [Graph Explorer](https://developer.microsoft.com/graph/graph-explorer)) :
+  `GET https://graph.microsoft.com/v1.0/sites/{hostname}:/sites/{nom-du-site}`
+  et récupérez le champ `id`.
 
 ## 3. Générer et ouvrir le projet Xcode
 
@@ -186,11 +195,12 @@ Dans Xcode :
 
 ## 4. Configurer l'app au premier lancement
 
-Dans l'onglet **Réglages** de l'app :
+Dans l'onglet **Réglages** de l'app (les valeurs par défaut correspondent déjà
+au fichier SIS2B) :
 
 1. **Client ID** et **Tenant ID** : collez les valeurs notées à l'étape 1.
 2. **Base du lecteur**, **chemin du fichier .xlsx**, **nom du tableau** :
-   valeurs de l'étape 2.1.
+   valeurs de l'étape 2 (`Demandes_Materiel` est déjà le nom par défaut).
 3. **Votre nom** / **Votre email** : utilisés en copie du mail envoyé et comme
    destinataire indiqué pour le retour du document signé.
 4. Bouton **Se connecter à Microsoft 365** : une fenêtre de connexion
@@ -200,36 +210,42 @@ Dans l'onglet **Réglages** de l'app :
 ## 5. Utiliser l'app
 
 1. Onglet **À valider** (écran principal) : liste toutes les lignes du
-   tableau Excel dont le statut n'est ni "Validée" ni "Refusée". Tirez vers
-   le bas pour rafraîchir après qu'un employé a soumis une nouvelle demande.
-2. Touchez une demande pour voir son détail, puis :
-   - **Valider la demande** → l'app écrit "Validée" dans Excel, génère le
-     PDF, puis ouvre la feuille **Mail** pré-remplie (PDF en pièce jointe,
-     adressée au bénéficiaire, avec le demandeur et vous en copie).
-     Vérifiez et appuyez sur **Envoyer**.
-   - **Refuser la demande** → confirmation, puis l'app écrit "Refusée" dans
+   tableau Excel dont le statut n'est ni `Traité` ni `Refusée`. Tirez vers
+   le bas pour rafraîchir après qu'une nouvelle demande est arrivée.
+2. Touchez une demande pour voir son détail (demandeur, bénéficiaire,
+   matériel, logiciels, groupement, opportunité, observations...), vérifiez/
+   complétez l'**email du bénéficiaire** si besoin, puis :
+   - **Valider la demande** → l'app écrit `Traité` dans Excel (et l'email
+     bénéficiaire s'il a été saisi), génère le PDF, puis ouvre la feuille
+     **Mail** pré-remplie (PDF en pièce jointe, adressée au bénéficiaire,
+     avec le demandeur et vous en copie). Vérifiez et appuyez sur **Envoyer**.
+   - **Refuser la demande** → confirmation, puis l'app écrit `Refusée` dans
      Excel. Aucun mail n'est envoyé.
 3. Le bénéficiaire signe le PDF reçu (à la main après impression, ou en
    l'annotant directement dans l'app Mail/Fichiers avec l'outil Marqueur) et
    vous le renvoie par retour de mail.
 4. Onglet **Ajouter** : pour saisir vous-même une demande reçue par un autre
-   canal (elle est directement enregistrée comme "Validée").
-5. Onglet **Historique** : liste toutes les demandes (en attente, validées,
-   refusées) avec leur statut, relues directement depuis le tableau Excel.
+   canal (elle est directement enregistrée comme `Traité`). Ce formulaire
+   simplifié ne couvre que demandeur/bénéficiaire/matériel/justification —
+   les champs Groupement/Téléphone/Logiciels/Opportunité restent vides pour
+   ces demandes.
+5. Onglet **Historique** : liste toutes les demandes (en attente, en cours,
+   traitées, refusées) avec leur statut, relues directement depuis le tableau
+   Excel.
 
 ## Notes techniques
 
 - Aucun backend n'est nécessaire : l'app appelle directement l'API Microsoft
   Graph (`workbook/tables/...`) pour lire et écrire dans le classeur Excel
   tel quel — le fichier reste ouvrable normalement dans Excel/Office en ligne,
-  et peut être alimenté par n'importe quel outil externe (formulaire, script,
-  saisie manuelle).
+  et continue d'être alimenté par le flux Power Automate existant.
 - Les colonnes sont identifiées par leur **nom d'en-tête**, pas par position :
-  l'app est donc tolérante à l'ordre des colonnes et à des colonnes
-  supplémentaires que le formulaire externe pourrait ajouter.
-- Mettre à jour le statut d'une ligne renvoie l'intégralité de ses valeurs à
-  Microsoft Graph (colonne Statut modifiée, le reste inchangé), afin de ne
-  perdre aucune donnée saisie par le formulaire externe.
+  l'app est donc tolérante à l'ordre des colonnes et aux colonnes
+  supplémentaires.
+- Mettre à jour une ligne (validation/refus) renvoie l'intégralité de ses
+  valeurs à Microsoft Graph (colonnes Statut et, le cas échéant,
+  Mail_Pour_Qui modifiées, le reste inchangé), afin de ne perdre aucune
+  donnée écrite par le flux Power Automate.
 - L'authentification utilise [MSAL pour iOS](https://github.com/AzureAD/microsoft-authentication-library-for-objc),
   la librairie officielle Microsoft, installée via Swift Package Manager
   (déclarée dans `project.yml`).
@@ -246,11 +262,16 @@ Dans l'onglet **Réglages** de l'app :
 - Un seul valideur : pour permettre à plusieurs personnes de valider depuis
   l'app, il faudrait ajouter une notion de rôle/compte (actuellement tout
   utilisateur connecté avec les bons droits Graph peut valider).
-- Pas de suivi de statut "signé/retourné" : le retour du PDF signé se fait
-  par mail classique, il n'est pas réimporté automatiquement dans Excel.
-  Cela pourrait être ajouté en écoutant les mails entrants (ex: via
-  Microsoft Graph `mail` API) ou avec une colonne de statut supplémentaire à
-  cocher manuellement.
+- La colonne `Mail_Pour_Qui` n'existe pas encore dans le tableau réel — voir
+  la section 2 ci-dessus. Tant qu'elle n'est pas ajoutée, l'app fonctionne
+  quand même grâce au champ email éditable, mais rien n'est pré-rempli
+  automatiquement pour les nouvelles demandes.
+- Le statut `En cours` existant dans le tableau n'est pas utilisé par l'app
+  (qui passe directement de `En attente` à `Traité`) ; si ce statut
+  intermédiaire doit être piloté depuis l'app plus tard, il faudra ajouter un
+  bouton "Marquer comme en cours" séparé.
+- `Date_Reception` n'est pas renseigné par l'app : le retour du PDF signé se
+  fait par mail classique et n'est pas réimporté automatiquement dans Excel.
 - Pas de notification push quand une nouvelle demande arrive : il faut ouvrir
   l'app et tirer pour rafraîchir l'onglet "À valider".
 - L'icône d'application (`AppIcon.appiconset`) est vide : ajoutez une image

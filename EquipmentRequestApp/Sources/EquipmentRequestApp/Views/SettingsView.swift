@@ -55,7 +55,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Fichier Excel (OneDrive / SharePoint)")
                 } footer: {
-                    Text("Le fichier doit déjà exister et contenir un tableau (Insertion > Tableau) nommé ci-dessus avec les colonnes : Date, Demandeur, Email demandeur, Bénéficiaire, Email bénéficiaire, Matériel, Justification, Statut.")
+                    Text("Le fichier doit déjà exister et contenir un tableau nommé ci-dessus, avec au minimum les colonnes Nom_Demandeur, Mail_Demandeur, Pour_Qui, Materiel, Statut et Observations (voir le README pour la liste complète et les variantes de noms acceptées).")
                 }
 
                 Section {

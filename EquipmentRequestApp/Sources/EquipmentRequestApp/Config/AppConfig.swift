@@ -31,12 +31,12 @@ final class AppConfig: ObservableObject {
         didSet { UserDefaults.standard.set(driveBasePath, forKey: Keys.driveBasePath) }
     }
 
-    /// Chemin du fichier .xlsx dans le lecteur, ex: "Demandes/DemandesMateriel.xlsx".
+    /// Chemin du fichier .xlsx dans le lecteur, ex: "Suivi_Demandes_Materiel_SIS2B.xlsx".
     @Published var excelFilePath: String {
         didSet { UserDefaults.standard.set(excelFilePath, forKey: Keys.excelFilePath) }
     }
 
-    /// Nom du tableau Excel (Insertion > Tableau) dans la feuille, ex: "DemandesMateriel".
+    /// Nom du tableau Excel (Insertion > Tableau) dans la feuille, ex: "Demandes_Materiel".
     @Published var tableName: String {
         didSet { UserDefaults.standard.set(tableName, forKey: Keys.tableName) }
     }
@@ -69,8 +69,8 @@ final class AppConfig: ObservableObject {
         clientId = defaults.string(forKey: Keys.clientId) ?? "REMPLACER-PAR-VOTRE-CLIENT-ID"
         tenantId = defaults.string(forKey: Keys.tenantId) ?? "REMPLACER-PAR-VOTRE-TENANT-ID"
         driveBasePath = defaults.string(forKey: Keys.driveBasePath) ?? "/me/drive"
-        excelFilePath = defaults.string(forKey: Keys.excelFilePath) ?? "Demandes/DemandesMateriel.xlsx"
-        tableName = defaults.string(forKey: Keys.tableName) ?? "DemandesMateriel"
+        excelFilePath = defaults.string(forKey: Keys.excelFilePath) ?? "Suivi_Demandes_Materiel_SIS2B.xlsx"
+        tableName = defaults.string(forKey: Keys.tableName) ?? "Demandes_Materiel"
         validatorEmail = defaults.string(forKey: Keys.validatorEmail) ?? ""
         validatorName = defaults.string(forKey: Keys.validatorName) ?? ""
     }

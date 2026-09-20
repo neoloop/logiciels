@@ -27,6 +27,15 @@ struct EquipmentRequest: Identifiable, Codable {
     /// d'essayer de le faire rentrer dans l'enum.
     var equipmentLabelOverride: String?
 
+    /// Champs de contexte présents dans le tableau Excel réel mais pas dans le
+    /// formulaire de saisie manuelle de l'app : vides pour une demande créée
+    /// depuis l'app, renseignés pour une demande relue depuis Excel.
+    var reference: String = ""
+    var groupement: String = ""
+    var phone: String = ""
+    var software: String = ""
+    var opportunity: String = ""
+
     init(
         id: UUID = UUID(),
         date: Date = Date(),
@@ -37,7 +46,12 @@ struct EquipmentRequest: Identifiable, Codable {
         equipmentType: EquipmentType = .laptop,
         equipmentOtherDetail: String = "",
         justification: String = "",
-        equipmentLabelOverride: String? = nil
+        equipmentLabelOverride: String? = nil,
+        reference: String = "",
+        groupement: String = "",
+        phone: String = "",
+        software: String = "",
+        opportunity: String = ""
     ) {
         self.id = id
         self.date = date
@@ -49,6 +63,11 @@ struct EquipmentRequest: Identifiable, Codable {
         self.equipmentOtherDetail = equipmentOtherDetail
         self.justification = justification
         self.equipmentLabelOverride = equipmentLabelOverride
+        self.reference = reference
+        self.groupement = groupement
+        self.phone = phone
+        self.software = software
+        self.opportunity = opportunity
     }
 
     /// Libellé du matériel affiché et écrit dans Excel (inclut le détail si "Autre").

@@ -51,12 +51,29 @@ enum PDFGenerator {
             draw("Générée le \(EquipmentRequest.dateFormatter.string(from: Date()))", font: smallFont, color: .gray, spacingAfter: 20)
             drawSeparator()
 
+            if !request.reference.isEmpty {
+                drawField(label: "Référence", value: request.reference)
+            }
             drawField(label: "Date de la demande", value: EquipmentRequest.dateFormatter.string(from: request.date))
             drawField(label: "Type de matériel demandé", value: request.equipmentLabel)
+            if !request.software.isEmpty {
+                drawField(label: "Logiciels associés", value: request.software)
+            }
 
             drawSeparator()
             drawField(label: "Demandeur (personne qui fait la demande)", value: "\(request.requesterName) — \(request.requesterEmail)")
             drawField(label: "Bénéficiaire (personne qui recevra le matériel)", value: "\(request.beneficiaryName) — \(request.beneficiaryEmail)")
+            if !request.groupement.isEmpty {
+                drawField(label: "Groupement", value: request.groupement)
+            }
+            if !request.phone.isEmpty {
+                drawField(label: "Téléphone", value: request.phone)
+            }
+
+            if !request.opportunity.isEmpty {
+                drawSeparator()
+                drawField(label: "Opportunité associée", value: request.opportunity)
+            }
 
             drawSeparator()
             drawField(label: "Justification de la demande", value: request.justification)

@@ -2,8 +2,8 @@ import SwiftUI
 import MessageUI
 
 /// Détail d'une demande en attente, avec les deux actions possibles : Valider
-/// (écrit le statut, génère le PDF et ouvre le mail pré-rempli) ou Refuser
-/// (écrit juste le statut, sans PDF ni mail).
+/// (écrit le statut "Traité", génère le PDF et ouvre le mail pré-rempli) ou
+/// Refuser (écrit "Refusée", sans PDF ni mail).
 struct PendingRequestDetailView: View {
     let row: ExcelEquipmentRequestRow
     let columnMap: ColumnMap
@@ -15,6 +15,7 @@ struct PendingRequestDetailView: View {
 
     private let excelService = GraphExcelService()
 
+    @State private var beneficiaryEmailInput: String
     @State private var isProcessing = false
     @State private var errorMessage: String?
     @State private var pdfData: Data?
@@ -22,7 +23,20 @@ struct PendingRequestDetailView: View {
     @State private var showMailUnavailableAlert = false
     @State private var showRejectConfirmation = false
 
-    private var equipmentRequest: EquipmentRequest { row.asEquipmentRequest() }
+    init(row: ExcelEquipmentRequestRow, columnMap: ColumnMap, onHandled: @escaping () -> Void) {
+        self.row = row
+        self.columnMap = columnMap
+        self.onHandled = onHandled
+        _beneficiaryEmailInput = State(initialValue: row.beneficiaryEmail)
+    }
+
+    private var equipmentRequest: EquipmentRequest {
+        row.asEquipmentRequest(overrideBeneficiaryEmail: beneficiaryEmailInput)
+    }
+
+    private var canValidate: Bool {
+        beneficiaryEmailInput.isValidEmail
+    }
 
     var body: some View {
         Form {
@@ -32,15 +46,47 @@ struct PendingRequestDetailView: View {
             }
             Section("Bénéficiaire") {
                 LabeledContent("Nom", value: row.beneficiaryName)
-                LabeledContent("Email", value: row.beneficiaryEmail)
+                TextField("Email du bénéficiaire", text: $beneficiaryEmailInput)
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+                    .keyboardType(.emailAddress)
+                if !row.phone.isEmpty {
+                    LabeledContent("Téléphone", value: row.phone)
+                }
             }
+            if row.beneficiaryEmail.isEmpty {
+                Section {
+                    Text("Le tableau Excel ne contient pas encore d'email pour le bénéficiaire. Saisissez-le ci-dessus : il sera aussi enregistré dans Excel lors de la validation.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Matériel") {
                 LabeledContent("Type", value: row.equipmentLabel)
+                if !row.software.isEmpty {
+                    LabeledContent("Logiciels", value: row.software)
+                }
                 if !row.date.isEmpty {
                     LabeledContent("Date de la demande", value: row.date)
                 }
             }
-            Section("Justification") {
+
+            if !row.groupement.isEmpty || !row.opportunity.isEmpty || !row.reference.isEmpty {
+                Section("Contexte") {
+                    if !row.reference.isEmpty {
+                        LabeledContent("Référence", value: row.reference)
+                    }
+                    if !row.groupement.isEmpty {
+                        LabeledContent("Groupement", value: row.groupement)
+                    }
+                    if !row.opportunity.isEmpty {
+                        LabeledContent("Opportunité", value: row.opportunity)
+                    }
+                }
+            }
+
+            Section("Observations") {
                 Text(row.justification.isEmpty ? "—" : row.justification)
             }
 
@@ -64,7 +110,7 @@ struct PendingRequestDetailView: View {
                         Text("Valider la demande")
                     }
                 }
-                .disabled(isProcessing)
+                .disabled(isProcessing || !canValidate)
 
                 Button("Refuser la demande", role: .destructive) {
                     showRejectConfirmation = true
@@ -89,7 +135,7 @@ struct PendingRequestDetailView: View {
         .sheet(isPresented: $showMailSheet) {
             if let pdfData {
                 MailComposeView(
-                    recipients: [row.beneficiaryEmail],
+                    recipients: [beneficiaryEmailInput],
                     ccRecipients: ccRecipients,
                     subject: "Demande de matériel à signer — \(row.equipmentLabel)",
                     body: mailBody,
@@ -140,7 +186,14 @@ struct PendingRequestDetailView: View {
 
         do {
             let token = try await authService.acquireToken(scopes: config.graphScopes)
-            try await excelService.updateStatus(.validated, for: row, columnMap: columnMap, accessToken: token, config: config)
+            try await excelService.updateStatus(
+                .processed,
+                for: row,
+                columnMap: columnMap,
+                beneficiaryEmail: beneficiaryEmailInput,
+                accessToken: token,
+                config: config
+            )
 
             let pdf = PDFGenerator.makeRequestPDF(for: equipmentRequest, validatorName: config.validatorName)
             self.pdfData = pdf

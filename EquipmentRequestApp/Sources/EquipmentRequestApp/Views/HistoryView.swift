@@ -92,7 +92,8 @@ private struct StatusBadge: View {
     private var color: Color {
         switch status {
         case .pending: return .orange
-        case .validated: return .green
+        case .inProgress: return .blue
+        case .processed: return .green
         case .rejected: return .red
         }
     }

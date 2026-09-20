@@ -106,8 +106,8 @@ struct GraphExcelService {
         set(ExcelColumn.beneficiaryName, request.beneficiaryName)
         set(ExcelColumn.beneficiaryEmail, request.beneficiaryEmail)
         set(ExcelColumn.equipment, request.equipmentLabel)
-        set(ExcelColumn.justification, request.justification)
-        set(ExcelColumn.status, RequestStatus.validated.rawValue)
+        set(ExcelColumn.observations, request.justification)
+        set(ExcelColumn.status, RequestStatus.processed.rawValue)
 
         let url = try tableBaseURL(config: config).appendingPathComponent("rows/add")
         var urlRequest = URLRequest(url: url)
@@ -122,13 +122,17 @@ struct GraphExcelService {
         try Self.validate(data: data, response: response)
     }
 
-    /// Met à jour le statut d'une ligne existante (Validée / Refusée), en renvoyant
+    /// Met à jour le statut d'une ligne existante (Traité / Refusée), en renvoyant
     /// le reste de ses valeurs inchangé pour ne pas perdre d'éventuelles colonnes
-    /// supplémentaires (horodatage, ID de réponse...) ajoutées par le formulaire externe.
+    /// supplémentaires (horodatage, ID de réponse...) ajoutées par le flux externe.
+    /// Si `beneficiaryEmail` est fourni et qu'une colonne d'email bénéficiaire
+    /// existe (ex : Mail_Pour_Qui), elle est mise à jour en même temps — utile
+    /// quand cette colonne est absente ou vide sur la ligne d'origine.
     func updateStatus(
         _ newStatus: RequestStatus,
         for row: ExcelEquipmentRequestRow,
         columnMap: ColumnMap,
+        beneficiaryEmail: String? = nil,
         accessToken: String,
         config: AppConfig
     ) async throws {
@@ -137,10 +141,19 @@ struct GraphExcelService {
         }
 
         var newValues = row.rawValues
-        while newValues.count <= statusIndex {
-            newValues.append("")
+        func ensureCount(atLeast count: Int) {
+            while newValues.count < count {
+                newValues.append("")
+            }
         }
+        ensureCount(atLeast: statusIndex + 1)
         newValues[statusIndex] = newStatus.rawValue
+
+        if let beneficiaryEmail, !beneficiaryEmail.isEmpty,
+           let emailIndex = columnMap.index(forAnyOf: ExcelColumn.beneficiaryEmail) {
+            ensureCount(atLeast: emailIndex + 1)
+            newValues[emailIndex] = beneficiaryEmail
+        }
 
         let url = try tableBaseURL(config: config).appendingPathComponent("rows/itemAt(index=\(row.index))")
         var urlRequest = URLRequest(url: url)
