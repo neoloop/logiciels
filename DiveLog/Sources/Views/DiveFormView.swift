@@ -10,6 +10,7 @@ struct DiveFormView: View {
     var dive: Dive?
 
     @State private var date: Date = .now
+    @State private var status: DiveStatus = .completed
     @State private var depthText: String = ""
     @State private var hours: Int = 0
     @State private var minutes: Int = 45
@@ -24,8 +25,8 @@ struct DiveFormView: View {
 
     private var isEditing: Bool { dive != nil }
 
-    private var isDepthValid: Bool {
-        Double(depthText.replacingOccurrences(of: ",", with: ".")) != nil
+    private var canSave: Bool {
+        status == .planned || Double(depthText.replacingOccurrences(of: ",", with: ".")) != nil
     }
 
     var body: some View {
@@ -34,9 +35,18 @@ struct DiveFormView: View {
                 DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
             }
 
+            Section("Statut") {
+                Picker("Statut", selection: $status) {
+                    ForEach(DiveStatus.allCases) { status in
+                        Text(status.label).tag(status)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Section("Profondeur") {
                 HStack {
-                    TextField("Profondeur", text: $depthText)
+                    TextField(status == .planned ? "Profondeur prévue (optionnel)" : "Profondeur", text: $depthText)
                         .keyboardType(.decimalPad)
                     Text("m")
                         .foregroundStyle(.secondary)
@@ -105,7 +115,7 @@ struct DiveFormView: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Enregistrer") { save() }
-                    .disabled(!isDepthValid)
+                    .disabled(!canSave)
             }
         }
         .onAppear(perform: populateFieldsIfNeeded)
@@ -114,6 +124,7 @@ struct DiveFormView: View {
     private func populateFieldsIfNeeded() {
         guard let dive else { return }
         date = dive.date
+        status = dive.status
         depthText = String(format: "%.0f", dive.depth)
         hours = dive.durationMinutes / 60
         minutes = dive.durationMinutes % 60
@@ -153,6 +164,7 @@ struct DiveFormView: View {
 
         if let dive {
             dive.date = date
+            dive.status = status
             dive.depth = depthValue
             dive.durationMinutes = totalMinutes
             dive.buddies = buddies
@@ -169,7 +181,8 @@ struct DiveFormView: View {
                 latitude: latitude,
                 longitude: longitude,
                 locationName: locationName,
-                notes: notes
+                notes: notes,
+                status: status
             )
             modelContext.insert(newDive)
         }

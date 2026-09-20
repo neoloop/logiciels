@@ -6,6 +6,23 @@ struct DiveListView: View {
     @Query(sort: \Dive.date, order: .reverse) private var dives: [Dive]
     @State private var isPresentingNewDive = false
 
+    private var upcomingDives: [Dive] {
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: .now)
+        guard let weekEnd = calendar.date(byAdding: .day, value: 7, to: startOfToday) else {
+            return []
+        }
+        return dives
+            .filter { $0.status == .planned && $0.date >= startOfToday && $0.date < weekEnd }
+            .sorted { $0.date < $1.date }
+    }
+
+    private var completedDives: [Dive] {
+        dives
+            .filter { $0.status == .completed }
+            .sorted { $0.date > $1.date }
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -17,12 +34,42 @@ struct DiveListView: View {
                     )
                 } else {
                     List {
-                        ForEach(dives) { dive in
-                            NavigationLink(value: dive) {
-                                DiveRowView(dive: dive)
+                        if !upcomingDives.isEmpty {
+                            Section("Programme de la semaine") {
+                                ForEach(upcomingDives) { dive in
+                                    NavigationLink(value: dive) {
+                                        DiveRowView(dive: dive)
+                                    }
+                                    .swipeActions(edge: .leading) {
+                                        Button {
+                                            markAsCompleted(dive)
+                                        } label: {
+                                            Label("Réalisée", systemImage: "checkmark")
+                                        }
+                                        .tint(.green)
+                                    }
+                                }
+                                .onDelete { offsets in
+                                    deleteDives(upcomingDives, at: offsets)
+                                }
                             }
                         }
-                        .onDelete(perform: deleteDives)
+
+                        Section("Historique") {
+                            if completedDives.isEmpty {
+                                Text("Aucune plongée réalisée pour le moment")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                ForEach(completedDives) { dive in
+                                    NavigationLink(value: dive) {
+                                        DiveRowView(dive: dive)
+                                    }
+                                }
+                                .onDelete { offsets in
+                                    deleteDives(completedDives, at: offsets)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -47,10 +94,14 @@ struct DiveListView: View {
         }
     }
 
-    private func deleteDives(at offsets: IndexSet) {
+    private func deleteDives(_ source: [Dive], at offsets: IndexSet) {
         for index in offsets {
-            modelContext.delete(dives[index])
+            modelContext.delete(source[index])
         }
+    }
+
+    private func markAsCompleted(_ dive: Dive) {
+        dive.status = .completed
     }
 }
 

@@ -22,6 +22,7 @@ struct DiveDetailView: View {
         List {
             Section {
                 LabeledContent("Date", value: DiveFormatters.dateFormatter.string(from: dive.date))
+                LabeledContent("Statut", value: dive.status.label)
                 LabeledContent("Profondeur", value: DiveFormatters.depth(dive.depth))
                 LabeledContent("Durée", value: DiveFormatters.duration(dive.durationMinutes))
             }
@@ -55,6 +56,11 @@ struct DiveDetailView: View {
         }
         .navigationTitle("Détail")
         .toolbar {
+            if dive.status == .planned {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Réalisée") { dive.status = .completed }
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button("Modifier") { isPresentingEdit = true }
             }

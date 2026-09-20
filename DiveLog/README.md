@@ -4,9 +4,10 @@ Application iOS (SwiftUI + SwiftData) pour tenir un carnet de plongée bouteille
 
 ## Fonctionnalités
 
-- **Journal des plongées** : date/heure, profondeur, durée, lieu (via géolocalisation GPS avec conversion en nom de lieu), et la liste des personnes avec qui vous avez plongé.
+- **Journal des plongées** : date/heure, statut (planifiée ou réalisée), profondeur, durée, lieu (via géolocalisation GPS avec conversion en nom de lieu), et la liste des personnes avec qui vous avez plongé.
+- **Programme de la semaine** : section dédiée listant les plongées planifiées dans les 7 prochains jours, avec un geste pour les marquer comme réalisées une fois faites.
 - **Détail d'une plongée** : affichage complet + carte du lieu de plongée.
-- **Statistiques** : nombre total de plongées, durée totale cumulée, profondeur cumulée, et répartition du nombre de plongées par tranche de profondeur (≤ 20 m, 20-40 m, 40-60 m, > 60 m).
+- **Statistiques** : nombre total de plongées réalisées, durée totale cumulée, profondeur cumulée, et répartition du nombre de plongées par tranche de profondeur (≤ 20 m, 20-40 m, 40-60 m, > 60 m).
 
 Les données sont stockées localement sur l'appareil avec SwiftData (aucune connexion réseau requise).
 

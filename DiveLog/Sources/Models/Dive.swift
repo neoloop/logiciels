@@ -11,6 +11,7 @@ final class Dive {
     var longitude: Double?
     var locationName: String?
     var notes: String
+    var status: DiveStatus
 
     init(
         date: Date = .now,
@@ -20,7 +21,8 @@ final class Dive {
         latitude: Double? = nil,
         longitude: Double? = nil,
         locationName: String? = nil,
-        notes: String = ""
+        notes: String = "",
+        status: DiveStatus = .completed
     ) {
         self.date = date
         self.depth = depth
@@ -30,6 +32,7 @@ final class Dive {
         self.longitude = longitude
         self.locationName = locationName
         self.notes = notes
+        self.status = status
     }
 
     var hasLocation: Bool {

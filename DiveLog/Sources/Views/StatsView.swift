@@ -11,12 +11,16 @@ private struct DepthBucket: Identifiable {
 struct StatsView: View {
     @Query private var dives: [Dive]
 
+    private var completedDives: [Dive] {
+        dives.filter { $0.status == .completed }
+    }
+
     private var totalDurationMinutes: Int {
-        dives.reduce(0) { $0 + $1.durationMinutes }
+        completedDives.reduce(0) { $0 + $1.durationMinutes }
     }
 
     private var totalDepth: Double {
-        dives.reduce(0) { $0 + $1.depth }
+        completedDives.reduce(0) { $0 + $1.depth }
     }
 
     private var buckets: [DepthBucket] {
@@ -27,7 +31,7 @@ struct StatsView: View {
             ("> 60 m", { $0 > 60 })
         ]
         return ranges.map { label, matches in
-            DepthBucket(label: label, count: dives.filter { matches($0.depth) }.count)
+            DepthBucket(label: label, count: completedDives.filter { matches($0.depth) }.count)
         }
     }
 
@@ -35,13 +39,13 @@ struct StatsView: View {
         NavigationStack {
             List {
                 Section("Résumé") {
-                    LabeledContent("Nombre de plongées", value: "\(dives.count)")
+                    LabeledContent("Nombre de plongées", value: "\(completedDives.count)")
                     LabeledContent("Durée totale", value: DiveFormatters.duration(totalDurationMinutes))
                     LabeledContent("Profondeur cumulée", value: DiveFormatters.depth(totalDepth))
                 }
 
                 Section("Plongées par profondeur") {
-                    if dives.isEmpty {
+                    if completedDives.isEmpty {
                         Text("Aucune donnée pour le moment")
                             .foregroundStyle(.secondary)
                     } else {
