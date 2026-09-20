@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Suivi de projets</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/dist/browser/msal-browser.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Suivi de projets</h1>
+    <div id="account-box"></div>
+  </header>
+
+  <div id="sign-in-screen" hidden>
+    <p>Connectez-vous avec votre compte Microsoft pour gérer vos projets et les synchroniser avec votre OneDrive.</p>
+    <button id="sign-in-btn" class="btn-primary">Se connecter avec Microsoft</button>
+    <p id="auth-error" class="sync-error"></p>
+  </div>
+
+  <main id="app-main" hidden>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="projects">Projets</button>
+      <button class="tab-btn" data-tab="gantt">Diagramme annuel</button>
+    </nav>
+
+    <section id="tab-projects" class="tab-panel active">
+      <div class="toolbar">
+        <span id="sync-status" class="sync-status"></span>
+        <span style="flex:1"></span>
+        <button id="new-project-btn" class="btn-primary">+ Nouveau projet</button>
+      </div>
+      <p id="sync-error" class="sync-error"></p>
+      <div id="project-list"></div>
+    </section>
+
+    <section id="tab-gantt" class="tab-panel">
+      <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        Année
+        <select id="year-select"></select>
+      </label>
+      <div class="gantt-legend">
+        <span><span class="gantt-swatch" style="background:var(--series-blue)"></span>En cours</span>
+        <span><span class="gantt-swatch" style="background:var(--status-good)"></span>Terminé</span>
+        <span><span class="gantt-swatch" style="background:var(--gridline)"></span>Durée totale</span>
+      </div>
+      <div id="gantt-container"></div>
+    </section>
+  </main>
+
+  <dialog id="project-dialog">
+    <form id="project-form">
+      <h2 id="project-dialog-title">Nouveau projet</h2>
+      <input type="hidden" id="project-id" />
+      <label>Nom du projet
+        <input type="text" id="project-name" required />
+      </label>
+      <label>Date de début
+        <input type="date" id="project-start" required />
+      </label>
+      <label>Date de fin
+        <input type="date" id="project-end" required />
+      </label>
+      <p class="project-duration" id="project-duration-preview"></p>
+      <label>Notes
+        <textarea id="project-notes" rows="3"></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="btn-secondary" data-close-dialog="project-dialog">Annuler</button>
+        <button type="submit" class="btn-primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="task-dialog">
+    <form id="task-form">
+      <h2 id="task-dialog-title">Nouvelle étape</h2>
+      <input type="hidden" id="task-id" />
+      <input type="hidden" id="task-project-id" />
+      <input type="hidden" id="task-order" />
+      <label>Nom de l'étape
+        <input type="text" id="task-name" required />
+      </label>
+      <label>Statut
+        <select id="task-status">
+          <option>À faire</option>
+          <option>En cours</option>
+          <option>Fait</option>
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="btn-secondary" data-close-dialog="task-dialog">Annuler</button>
+        <button type="submit" class="btn-primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
