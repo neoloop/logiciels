@@ -1,9 +1,28 @@
 import Foundation
 
-/// Local cache of Project/ProjectTask, backed by the shared Excel workbook.
-/// Excel table rows are the source of truth — every mutation writes through to Graph,
-/// then reloads the affected table so the row-index cache used for later updates/deletes
-/// stays correct.
+private struct StoreFile: Codable {
+    var projects: [ProjectRecord] = []
+    var tasks: [TaskRecord] = []
+}
+
+private struct ProjectRecord: Codable {
+    var id: String
+    var name: String
+    var startDate: String
+    var endDate: String
+    var notes: String
+}
+
+private struct TaskRecord: Codable {
+    var id: String
+    var projectId: String
+    var name: String
+    var status: String
+    var order: Int
+}
+
+/// Local cache of Project/ProjectTask, backed by the shared JSON file on OneDrive. Every mutation
+/// updates the in-memory arrays and re-uploads the whole file — no server, no partial updates.
 @MainActor
 final class ProjectStore: ObservableObject {
     @Published var projects: [Project] = []
@@ -11,11 +30,8 @@ final class ProjectStore: ObservableObject {
     @Published var isSyncing = false
     @Published var syncError: String?
 
-    private let service = GraphExcelService()
+    private let service = GraphStoreService()
     private let auth = AuthManager.shared
-
-    private var projectRowIndex: [String: Int] = [:]
-    private var taskRowIndex: [String: Int] = [:]
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -24,11 +40,6 @@ final class ProjectStore: ObservableObject {
         formatter.timeZone = TimeZone(identifier: "UTC")
         return formatter
     }()
-
-    /// Excel's day-zero, used to decode dates that Excel auto-converted to a numeric serial
-    /// despite the column being written as a "yyyy-MM-dd" string (format the columns as Text
-    /// in the workbook to avoid this — see docs/SETUP.md).
-    private static let excelEpoch = Date(timeIntervalSince1970: -2_209_161_600)
 
     func tasks(for projectId: String) -> [ProjectTask] {
         tasks.filter { $0.projectId == projectId }.sorted { $0.order < $1.order }
@@ -40,112 +51,72 @@ final class ProjectStore: ObservableObject {
         defer { isSyncing = false }
         do {
             let token = try await auth.acquireTokenSilently()
-            async let projectRowsTask = service.rows(table: "Projects", token: token)
-            async let taskRowsTask = service.rows(table: "Tasks", token: token)
-            let (projectRows, taskRows) = try await (projectRowsTask, taskRowsTask)
-
-            var loadedProjects: [Project] = []
-            var newProjectIndex: [String: Int] = [:]
-            for (index, row) in projectRows.enumerated() {
-                guard row.count >= 6,
-                      let start = Self.parseDate(row[2]),
-                      let end = Self.parseDate(row[3])
-                else { continue }
-                loadedProjects.append(Project(id: row[0], name: row[1], startDate: start, endDate: end, notes: row[5]))
-                newProjectIndex[row[0]] = index
+            guard let data = try await service.download(token: token) else {
+                projects = []
+                tasks = []
+                return
             }
-
-            var loadedTasks: [ProjectTask] = []
-            var newTaskIndex: [String: Int] = [:]
-            for (index, row) in taskRows.enumerated() {
-                guard row.count >= 5,
-                      let status = TaskStatus(rawValue: row[3]),
-                      let order = Int(row[4])
-                else { continue }
-                loadedTasks.append(ProjectTask(id: row[0], projectId: row[1], name: row[2], status: status, order: order))
-                newTaskIndex[row[0]] = index
+            let file = try JSONDecoder().decode(StoreFile.self, from: data)
+            projects = file.projects.compactMap { record in
+                guard let start = Self.parseDate(record.startDate), let end = Self.parseDate(record.endDate) else { return nil }
+                return Project(id: record.id, name: record.name, startDate: start, endDate: end, notes: record.notes)
+            }.sorted { $0.startDate < $1.startDate }
+            tasks = file.tasks.compactMap { record in
+                guard let status = TaskStatus(rawValue: record.status) else { return nil }
+                return ProjectTask(id: record.id, projectId: record.projectId, name: record.name, status: status, order: record.order)
             }
+        } catch {
+            syncError = error.localizedDescription
+        }
+    }
 
-            projects = loadedProjects.sorted { $0.startDate < $1.startDate }
-            tasks = loadedTasks
-            projectRowIndex = newProjectIndex
-            taskRowIndex = newTaskIndex
+    private func persist() async {
+        do {
+            let token = try await auth.acquireTokenSilently()
+            let file = StoreFile(
+                projects: projects.map {
+                    ProjectRecord(id: $0.id, name: $0.name, startDate: Self.format($0.startDate), endDate: Self.format($0.endDate), notes: $0.notes)
+                },
+                tasks: tasks.map {
+                    TaskRecord(id: $0.id, projectId: $0.projectId, name: $0.name, status: $0.status.rawValue, order: $0.order)
+                }
+            )
+            let data = try JSONEncoder().encode(file)
+            try await service.upload(data, token: token)
         } catch {
             syncError = error.localizedDescription
         }
     }
 
     func saveProject(_ project: Project) async {
-        do {
-            let token = try await auth.acquireTokenSilently()
-            let values = [
-                project.id, project.name,
-                Self.format(project.startDate), Self.format(project.endDate),
-                String(project.durationInDays), project.notes,
-            ]
-            if let index = projectRowIndex[project.id] {
-                try await service.updateRow(table: "Projects", index: index, values: values, token: token)
-            } else {
-                try await service.addRow(table: "Projects", values: values, token: token)
-            }
-            await refresh()
-        } catch {
-            syncError = error.localizedDescription
+        if let index = projects.firstIndex(where: { $0.id == project.id }) {
+            projects[index] = project
+        } else {
+            projects.append(project)
         }
+        await persist()
     }
 
     func deleteProject(_ project: Project) async {
-        do {
-            let token = try await auth.acquireTokenSilently()
-            // Delete highest row index first: removing a row shifts every following index down,
-            // so deleting low-to-high would target the wrong rows partway through.
-            let relatedTaskIndices = tasks(for: project.id)
-                .compactMap { taskRowIndex[$0.id] }
-                .sorted(by: >)
-            for index in relatedTaskIndices {
-                try await service.deleteRow(table: "Tasks", index: index, token: token)
-            }
-            if let index = projectRowIndex[project.id] {
-                try await service.deleteRow(table: "Projects", index: index, token: token)
-            }
-            await refresh()
-        } catch {
-            syncError = error.localizedDescription
-        }
+        projects.removeAll { $0.id == project.id }
+        tasks.removeAll { $0.projectId == project.id }
+        await persist()
     }
 
     func saveTask(_ task: ProjectTask) async {
-        do {
-            let token = try await auth.acquireTokenSilently()
-            let values = [task.id, task.projectId, task.name, task.status.rawValue, String(task.order)]
-            if let index = taskRowIndex[task.id] {
-                try await service.updateRow(table: "Tasks", index: index, values: values, token: token)
-            } else {
-                try await service.addRow(table: "Tasks", values: values, token: token)
-            }
-            await refresh()
-        } catch {
-            syncError = error.localizedDescription
+        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            tasks[index] = task
+        } else {
+            tasks.append(task)
         }
+        await persist()
     }
 
     func deleteTask(_ task: ProjectTask) async {
-        do {
-            let token = try await auth.acquireTokenSilently()
-            if let index = taskRowIndex[task.id] {
-                try await service.deleteRow(table: "Tasks", index: index, token: token)
-            }
-            await refresh()
-        } catch {
-            syncError = error.localizedDescription
-        }
+        tasks.removeAll { $0.id == task.id }
+        await persist()
     }
 
-    private static func parseDate(_ raw: String) -> Date? {
-        if let date = dateFormatter.date(from: raw) { return date }
-        if let serial = Double(raw) { return excelEpoch.addingTimeInterval(serial * 86400) }
-        return nil
-    }
-
+    private static func parseDate(_ raw: String) -> Date? { dateFormatter.date(from: raw) }
     private static func format(_ date: Date) -> String { dateFormatter.string(from: date) }
 }

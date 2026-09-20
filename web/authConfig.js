@@ -12,5 +12,6 @@ export const msalConfig = {
 
 export const graphScopes = ["User.Read", "Files.ReadWrite"];
 
-// Chemin (depuis la racine OneDrive) vers le classeur partagé avec l'app iOS.
-export const workbookPath = "/me/drive/root:/ProjectTracker.xlsx:/workbook";
+// Nom du fichier JSON, à la racine de OneDrive, partagé avec l'app iOS. Créé automatiquement
+// à la première sauvegarde.
+export const dataFileName = "ProjectTracker.json";

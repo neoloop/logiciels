@@ -1,4 +1,4 @@
-import { msalConfig, graphScopes, workbookPath } from "./authConfig.js";
+import { msalConfig, graphScopes, dataFileName } from "./authConfig.js";
 
 const msalInstance = new msal.PublicClientApplication(msalConfig);
 let account = null;
@@ -39,51 +39,36 @@ async function getToken() {
   }
 }
 
-async function graphFetch(path, options = {}) {
+const contentUrl = () => `https://graph.microsoft.com/v1.0/me/drive/root:/${dataFileName}:/content`;
+
+// Le fichier entier est téléchargé, modifié en mémoire, puis renvoyé en entier à chaque
+// changement : pas de serveur, pas de mise à jour partielle. Adapté à un usage par une
+// personne sur un appareil à la fois.
+
+/** null si le fichier n'existe pas encore (premier lancement) — traité comme un magasin vide. */
+export async function downloadStore() {
   const token = await getToken();
-  const response = await fetch(`https://graph.microsoft.com/v1.0${workbookPath}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+  const response = await fetch(contentUrl(), {
+    headers: { Authorization: `Bearer ${token}` },
   });
+  if (response.status === 404) return null;
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Erreur Microsoft Graph (${response.status}) : ${text}`);
+    throw new Error(`Erreur Microsoft Graph (${response.status}) : ${await response.text()}`);
   }
-  if (response.status === 204) return null;
   return response.json();
 }
 
-function cellString(value) {
-  if (typeof value === "number") return String(value);
-  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
-  return value ?? "";
-}
-
-export async function rows(table) {
-  const data = await graphFetch(`/tables/${table}/rows`);
-  return (data.value || []).map((item) => (item.values?.[0] || []).map(cellString));
-}
-
-export async function addRow(table, values) {
-  await graphFetch(`/tables/${table}/rows`, {
-    method: "POST",
-    body: JSON.stringify({ values: [values] }),
+export async function uploadStore(data) {
+  const token = await getToken();
+  const response = await fetch(contentUrl(), {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
   });
-}
-
-export async function updateRow(table, index, values) {
-  await graphFetch(`/tables/${table}/rows/itemAt(index=${index})`, {
-    method: "PATCH",
-    body: JSON.stringify({ values: [values] }),
-  });
-}
-
-// Supprimer décale l'index de chaque ligne suivante d'un cran : pour supprimer plusieurs
-// lignes d'une même table, il faut les supprimer de l'index le plus haut vers le plus bas.
-export async function deleteRow(table, index) {
-  await graphFetch(`/tables/${table}/rows/itemAt(index=${index})/delete`, { method: "POST" });
+  if (!response.ok) {
+    throw new Error(`Erreur Microsoft Graph (${response.status}) : ${await response.text()}`);
+  }
 }

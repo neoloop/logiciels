@@ -11,7 +11,7 @@ struct SignInView: View {
                 .foregroundStyle(.blue)
             Text("Suivi de projets")
                 .font(.title.bold())
-            Text("Connectez-vous avec votre compte Microsoft pour synchroniser vos projets avec le classeur Excel sur OneDrive.")
+            Text("Connectez-vous avec votre compte Microsoft pour synchroniser vos projets avec votre OneDrive.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 32)

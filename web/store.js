@@ -1,6 +1,5 @@
-import * as graph from "./graph.js";
+import { downloadStore, uploadStore } from "./graph.js";
 
-const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30);
 const VALID_STATUSES = ["À faire", "En cours", "Fait"];
 
 function formatDate(date) {
@@ -8,13 +7,9 @@ function formatDate(date) {
 }
 
 function parseDate(raw) {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    const [y, m, d] = raw.split("-").map(Number);
-    return new Date(Date.UTC(y, m - 1, d));
-  }
-  const serial = Number(raw);
-  if (!Number.isNaN(serial) && raw !== "") return new Date(EXCEL_EPOCH_MS + serial * 86400000);
-  return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const [y, m, d] = raw.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
 }
 
 export function projectDuration(project) {
@@ -25,8 +20,6 @@ export function projectDuration(project) {
 export const store = {
   projects: [],
   tasks: [],
-  projectRowIndex: new Map(),
-  taskRowIndex: new Map(),
   isSyncing: false,
   syncError: null,
 };
@@ -39,33 +32,26 @@ export async function refresh() {
   store.isSyncing = true;
   store.syncError = null;
   try {
-    const [projectRows, taskRows] = await Promise.all([graph.rows("Projects"), graph.rows("Tasks")]);
+    const file = await downloadStore();
+    if (!file) {
+      store.projects = [];
+      store.tasks = [];
+      return;
+    }
 
-    const projects = [];
-    const projectRowIndex = new Map();
-    projectRows.forEach((row, index) => {
-      if (row.length < 6) return;
-      const startDate = parseDate(row[2]);
-      const endDate = parseDate(row[3]);
-      if (!startDate || !endDate) return;
-      projects.push({ id: row[0], name: row[1], startDate, endDate, notes: row[5] });
-      projectRowIndex.set(row[0], index);
-    });
+    store.projects = (file.projects || [])
+      .map((r) => {
+        const startDate = parseDate(r.startDate);
+        const endDate = parseDate(r.endDate);
+        if (!startDate || !endDate) return null;
+        return { id: r.id, name: r.name, startDate, endDate, notes: r.notes || "" };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.startDate - b.startDate);
 
-    const tasks = [];
-    const taskRowIndex = new Map();
-    taskRows.forEach((row, index) => {
-      if (row.length < 5) return;
-      const order = Number(row[4]);
-      if (!VALID_STATUSES.includes(row[3]) || Number.isNaN(order)) return;
-      tasks.push({ id: row[0], projectId: row[1], name: row[2], status: row[3], order });
-      taskRowIndex.set(row[0], index);
-    });
-
-    store.projects = projects.sort((a, b) => a.startDate - b.startDate);
-    store.tasks = tasks;
-    store.projectRowIndex = projectRowIndex;
-    store.taskRowIndex = taskRowIndex;
+    store.tasks = (file.tasks || [])
+      .filter((r) => VALID_STATUSES.includes(r.status) && Number.isInteger(r.order))
+      .map((r) => ({ id: r.id, projectId: r.projectId, name: r.name, status: r.status, order: r.order }));
   } catch (error) {
     store.syncError = error.message;
   } finally {
@@ -73,46 +59,47 @@ export async function refresh() {
   }
 }
 
+async function persist() {
+  const file = {
+    projects: store.projects.map((p) => ({
+      id: p.id,
+      name: p.name,
+      startDate: formatDate(p.startDate),
+      endDate: formatDate(p.endDate),
+      notes: p.notes || "",
+    })),
+    tasks: store.tasks.map((t) => ({ id: t.id, projectId: t.projectId, name: t.name, status: t.status, order: t.order })),
+  };
+  try {
+    await uploadStore(file);
+  } catch (error) {
+    store.syncError = error.message;
+  }
+}
+
 export async function saveProject(project) {
-  const values = [
-    project.id,
-    project.name,
-    formatDate(project.startDate),
-    formatDate(project.endDate),
-    String(projectDuration(project)),
-    project.notes || "",
-  ];
-  const index = store.projectRowIndex.get(project.id);
-  if (index !== undefined) await graph.updateRow("Projects", index, values);
-  else await graph.addRow("Projects", values);
-  await refresh();
+  const index = store.projects.findIndex((p) => p.id === project.id);
+  if (index >= 0) store.projects[index] = project;
+  else store.projects.push(project);
+  await persist();
 }
 
 export async function deleteProject(project) {
-  const relatedIndices = tasksFor(project.id)
-    .map((t) => store.taskRowIndex.get(t.id))
-    .filter((i) => i !== undefined)
-    .sort((a, b) => b - a);
-  for (const index of relatedIndices) {
-    await graph.deleteRow("Tasks", index);
-  }
-  const index = store.projectRowIndex.get(project.id);
-  if (index !== undefined) await graph.deleteRow("Projects", index);
-  await refresh();
+  store.projects = store.projects.filter((p) => p.id !== project.id);
+  store.tasks = store.tasks.filter((t) => t.projectId !== project.id);
+  await persist();
 }
 
 export async function saveTask(task) {
-  const values = [task.id, task.projectId, task.name, task.status, String(task.order)];
-  const index = store.taskRowIndex.get(task.id);
-  if (index !== undefined) await graph.updateRow("Tasks", index, values);
-  else await graph.addRow("Tasks", values);
-  await refresh();
+  const index = store.tasks.findIndex((t) => t.id === task.id);
+  if (index >= 0) store.tasks[index] = task;
+  else store.tasks.push(task);
+  await persist();
 }
 
 export async function deleteTask(task) {
-  const index = store.taskRowIndex.get(task.id);
-  if (index !== undefined) await graph.deleteRow("Tasks", index);
-  await refresh();
+  store.tasks = store.tasks.filter((t) => t.id !== task.id);
+  await persist();
 }
 
 export const TASK_STATUSES = VALID_STATUSES;

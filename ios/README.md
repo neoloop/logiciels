@@ -21,7 +21,7 @@ ProjectTracker/
 ├── Services/
 │   ├── AuthConfig.swift           clientId / redirectUri à renseigner
 │   ├── AuthManager.swift          connexion Microsoft (MSAL)
-│   ├── GraphExcelService.swift    lecture/écriture des tables Excel via Graph
+│   ├── GraphStoreService.swift    lecture/écriture du fichier JSON via Graph
 │   └── ProjectStore.swift         cache local + synchronisation
 └── Views/                         écrans SwiftUI
 ```

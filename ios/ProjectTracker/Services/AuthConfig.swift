@@ -9,6 +9,7 @@ enum AuthConfig {
     /// of the form "msauth.<your.bundle.id>://auth". Copy it exactly from the Azure portal.
     static let redirectUri = "msauth.REPLACE_WITH_YOUR_BUNDLE_ID://auth"
 
-    /// Path (from the OneDrive root) to the shared workbook both the app and the web page use.
-    static let workbookPath = "/me/drive/root:/ProjectTracker.xlsx:/workbook"
+    /// Name of the shared JSON file, at the root of OneDrive, both the app and the web page
+    /// read/write as their whole data store. Created automatically on first save.
+    static let dataFileName = "ProjectTracker.json"
 }

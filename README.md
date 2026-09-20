@@ -10,9 +10,9 @@ Deux clients, une seule source de données :
 - **`web/`** — page web à héberger sur GitHub Pages, pour gérer vos projets
   depuis un navigateur.
 
-Les deux lisent/écrivent directement dans un classeur **Excel sur OneDrive**
-(`ProjectTracker.xlsx`) via l'API Microsoft Graph — pas de serveur ni de base
-de données séparée.
+Les deux lisent/écrivent directement dans un fichier **JSON sur OneDrive**
+(`ProjectTracker.json`, créé automatiquement) via l'API Microsoft Graph —
+pas de serveur ni de base de données séparée.
 
-Pour tout configurer (classeur Excel, inscription Azure AD, projet Xcode,
-GitHub Pages), suivez **[`docs/SETUP.md`](docs/SETUP.md)**.
+Pour tout configurer (inscription Azure AD, projet Xcode, GitHub Pages),
+suivez **[`docs/SETUP.md`](docs/SETUP.md)**.
