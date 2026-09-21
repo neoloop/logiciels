@@ -48,7 +48,12 @@ struct DashboardView: View {
             }
         }
         .refreshable {
-            await store.refreshFromSavedBookmark()
+            // Re-reading via the saved bookmark can silently serve a stale cached copy for
+            // third-party providers like OneDrive (their file-provider extension doesn't
+            // always re-check the server for a bookmarked URL accessed outside the Files
+            // app). Reopening the picker goes through the live Files UI, which reliably
+            // fetches the current version.
+            isShowingFilePicker = true
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

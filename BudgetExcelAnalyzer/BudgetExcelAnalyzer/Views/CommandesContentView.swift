@@ -220,8 +220,15 @@ struct CommandesContentView: View {
             }
         }
         .refreshable {
-            await store.refreshFromSavedBookmark()
-            await seditStore.refreshFromSavedBookmark()
+            // See DashboardView: re-reading via the saved bookmark can silently serve a
+            // stale cached copy with third-party providers like OneDrive, so reopen the
+            // live picker instead of relying on it. Reopens whichever file the current tab
+            // actually shows.
+            if selectedTab == .ecarts {
+                isShowingSeditFilePicker = true
+            } else {
+                isShowingFilePicker = true
+            }
         }
         .toolbar {
             if selectedTab == .ecarts && !seditStore.commandes.isEmpty {
