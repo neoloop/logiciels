@@ -2,7 +2,14 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject private var store: BudgetDataStore
+    @EnvironmentObject private var commandesStore: CommandesDataStore
+    @EnvironmentObject private var seditStore: SeditDataStore
     @Binding var isShowingFilePicker: Bool
+
+    @State private var isShowingFolderPicker = false
+    @State private var isImportingFolder = false
+    @State private var folderImportSummary: String?
+    @State private var folderImportError: String?
 
     var body: some View {
         List {
@@ -57,12 +64,113 @@ struct DashboardView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    isShowingFilePicker = true
+                Menu {
+                    Button {
+                        isShowingFilePicker = true
+                    } label: {
+                        Label("Fichier budget seul", systemImage: "doc")
+                    }
+                    Button {
+                        isShowingFolderPicker = true
+                    } label: {
+                        Label("Dossier complet (budget, commandes, Sedit)", systemImage: "folder")
+                    }
                 } label: {
                     Label("Importer", systemImage: "square.and.arrow.down")
                 }
             }
+        }
+        .fileImporter(
+            isPresented: $isShowingFolderPicker,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let folderURL = urls.first {
+                    Task { await importFolder(at: folderURL) }
+                }
+            case .failure(let error):
+                folderImportError = error.localizedDescription
+            }
+        }
+        .overlay {
+            if isImportingFolder {
+                ProgressView("Analyse du dossier…")
+                    .padding()
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
+        .alert(
+            "Erreur",
+            isPresented: Binding(
+                get: { folderImportError != nil },
+                set: { if !$0 { folderImportError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(folderImportError ?? "")
+        }
+        .alert(
+            "Import du dossier",
+            isPresented: Binding(
+                get: { folderImportSummary != nil },
+                set: { if !$0 { folderImportSummary = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(folderImportSummary ?? "")
+        }
+    }
+
+    private func importFolder(at folderURL: URL) async {
+        isImportingFolder = true
+        defer { isImportingFolder = false }
+
+        let needsAccess = folderURL.startAccessingSecurityScopedResource()
+        defer { if needsAccess { folderURL.stopAccessingSecurityScopedResource() } }
+
+        do {
+            let classified = try await Task.detached(priority: .userInitiated) {
+                try FolderImportService.classifyFiles(in: folderURL)
+            }.value
+
+            var found: [String] = []
+            var missing: [String] = []
+
+            if let budgetURL = classified.budgetFileURL {
+                await store.importFile(from: budgetURL)
+                found.append("Budget")
+            } else {
+                missing.append("Budget")
+            }
+
+            if let commandesURL = classified.commandesFileURL {
+                await commandesStore.importFile(from: commandesURL)
+                found.append("Commandes")
+            } else {
+                missing.append("Commandes")
+            }
+
+            if let seditURL = classified.seditFileURL {
+                await seditStore.importFile(from: seditURL)
+                found.append("Sedit")
+            } else {
+                missing.append("Sedit")
+            }
+
+            var summary = "Importés : \(found.joined(separator: ", "))."
+            if !missing.isEmpty {
+                summary += "\nNon trouvés dans le dossier : \(missing.joined(separator: ", "))."
+            }
+            if !classified.unrecognizedFileNames.isEmpty {
+                summary += "\nFichiers non reconnus : \(classified.unrecognizedFileNames.joined(separator: ", "))."
+            }
+            folderImportSummary = summary
+        } catch {
+            folderImportError = error.localizedDescription
         }
     }
 }
