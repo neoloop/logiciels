@@ -62,6 +62,9 @@ NEXTAUTH_URL=http://localhost:3000
 
 ### 3. Installer et lancer
 
+Nécessite **Node.js 22.5 ou plus récent** (pour le module SQLite intégré,
+pas de compilation native requise).
+
 ```bash
 npm install
 npm run dev

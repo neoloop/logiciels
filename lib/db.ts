@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import path from "path";
 import fs from "fs";
 
@@ -7,10 +7,11 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-const db = new Database(path.join(DATA_DIR, "tracker.db"));
-db.pragma("journal_mode = WAL");
+const db = new DatabaseSync(path.join(DATA_DIR, "tracker.db"));
 
 db.exec(`
+  PRAGMA journal_mode = WAL;
+
   CREATE TABLE IF NOT EXISTS tracked_emails (
     id TEXT NOT NULL,
     user_email TEXT NOT NULL,
@@ -128,13 +129,13 @@ export function listTrackedEmails(userEmail: string): TrackedEmail[] {
     .prepare(
       `SELECT * FROM tracked_emails WHERE user_email = @userEmail ORDER BY sent_at DESC`
     )
-    .all({ userEmail }) as TrackedEmail[];
+    .all({ userEmail }) as unknown as TrackedEmail[];
 }
 
 export function getTrackedEmail(id: string, userEmail: string): TrackedEmail | undefined {
   return db
     .prepare(`SELECT * FROM tracked_emails WHERE id = @id AND user_email = @userEmail`)
-    .get({ id, userEmail }) as TrackedEmail | undefined;
+    .get({ id, userEmail }) as unknown as TrackedEmail | undefined;
 }
 
 function ensureSettingsRow(userEmail: string) {
@@ -150,7 +151,7 @@ export function getSettings(userEmail: string): Settings {
     .prepare(
       `SELECT follow_up_delay_days, sync_interval_minutes, last_synced_at FROM settings WHERE user_email = @userEmail`
     )
-    .get({ userEmail }) as
+    .get({ userEmail }) as unknown as
     | { follow_up_delay_days: number; sync_interval_minutes: number; last_synced_at: string | null }
     | undefined;
 
@@ -192,7 +193,7 @@ export function touchLastSyncedAt(userEmail: string, at: string) {
 export function listUserEmailsWithSyncEnabled(): string[] {
   const rows = db
     .prepare(`SELECT user_email FROM settings WHERE sync_interval_minutes > 0`)
-    .all() as { user_email: string }[];
+    .all() as unknown as { user_email: string }[];
   return rows.map((r) => r.user_email);
 }
 
@@ -222,7 +223,7 @@ export function getOAuthTokens(userEmail: string): OAuthTokens | undefined {
     .prepare(
       `SELECT refresh_token, access_token, access_token_expires FROM oauth_tokens WHERE user_email = @userEmail`
     )
-    .get({ userEmail }) as
+    .get({ userEmail }) as unknown as
     | { refresh_token: string; access_token: string | null; access_token_expires: number | null }
     | undefined;
 
@@ -237,5 +238,3 @@ export function getOAuthTokens(userEmail: string): OAuthTokens | undefined {
 export function deleteOAuthTokens(userEmail: string) {
   db.prepare(`DELETE FROM oauth_tokens WHERE user_email = @userEmail`).run({ userEmail });
 }
-
-export default db;
