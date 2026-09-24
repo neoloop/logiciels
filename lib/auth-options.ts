@@ -1,35 +1,7 @@
 import type { AuthOptions } from "next-auth";
 import AzureADProvider from "next-auth/providers/azure-ad";
-import { GRAPH_SCOPES, InvalidGrantError, refreshGraphAccessToken } from "@/lib/graph-auth";
-import { saveOAuthTokens, deleteOAuthTokens } from "@/lib/db";
-
-async function refreshAccessToken(token: any) {
-  try {
-    const refreshed = await refreshGraphAccessToken(token.refreshToken);
-
-    if (token.email) {
-      saveOAuthTokens(token.email, {
-        refreshToken: refreshed.refreshToken,
-        accessToken: refreshed.accessToken,
-        accessTokenExpires: refreshed.accessTokenExpires,
-      });
-    }
-
-    return {
-      ...token,
-      accessToken: refreshed.accessToken,
-      accessTokenExpires: refreshed.accessTokenExpires,
-      refreshToken: refreshed.refreshToken,
-      error: undefined,
-    };
-  } catch (error) {
-    console.error("Échec du rafraîchissement du token", error);
-    if (error instanceof InvalidGrantError && token.email) {
-      deleteOAuthTokens(token.email);
-    }
-    return { ...token, error: "RefreshAccessTokenError" as const };
-  }
-}
+import { GRAPH_SCOPES } from "@/lib/graph-auth";
+import { saveOAuthTokens } from "@/lib/db";
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -41,36 +13,18 @@ export const authOptions: AuthOptions = {
     }),
   ],
   callbacks: {
+    // Ne garde dans le token/cookie de session que l'identité (email, nom) — jamais les tokens Graph,
+    // pour éviter de dépasser la taille max des en-têtes HTTP et limiter ce qui transite au client.
+    // Les tokens Graph eux-mêmes vivent uniquement en base (voir lib/token-service.ts).
     async jwt({ token, account }) {
-      if (account) {
-        const accessTokenExpires = (account.expires_at as number) * 1000;
-
-        if (token.email && account.refresh_token) {
-          saveOAuthTokens(token.email, {
-            refreshToken: account.refresh_token,
-            accessToken: account.access_token ?? null,
-            accessTokenExpires,
-          });
-        }
-
-        return {
-          ...token,
-          accessToken: account.access_token,
+      if (account && token.email && account.refresh_token) {
+        saveOAuthTokens(token.email, {
           refreshToken: account.refresh_token,
-          accessTokenExpires,
-        };
+          accessToken: account.access_token ?? null,
+          accessTokenExpires: (account.expires_at as number) * 1000,
+        });
       }
-
-      if (Date.now() < (token.accessTokenExpires as number)) {
-        return token;
-      }
-
-      return refreshAccessToken(token);
-    },
-    async session({ session, token }) {
-      session.accessToken = token.accessToken as string | undefined;
-      session.error = token.error as string | undefined;
-      return session;
+      return token;
     },
   },
   session: {

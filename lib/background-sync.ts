@@ -1,47 +1,8 @@
-import {
-  listUserEmailsWithSyncEnabled,
-  getSettings,
-  getOAuthTokens,
-  saveOAuthTokens,
-  deleteOAuthTokens,
-} from "@/lib/db";
-import { refreshGraphAccessToken, InvalidGrantError } from "@/lib/graph-auth";
+import { listUserEmailsWithSyncEnabled, getSettings } from "@/lib/db";
+import { getUsableAccessToken } from "@/lib/token-service";
 import { checkRepliesForTrackedEmails } from "@/lib/sync-service";
 
 const TICK_MS = 5 * 60 * 1000; // fréquence de vérification ; chaque utilisateur garde son propre intervalle
-const ACCESS_TOKEN_EXPIRY_BUFFER_MS = 2 * 60 * 1000;
-
-async function getUsableAccessToken(userEmail: string): Promise<string | null> {
-  const tokens = getOAuthTokens(userEmail);
-  if (!tokens) return null;
-
-  const stillValid =
-    tokens.accessToken &&
-    tokens.accessTokenExpires &&
-    tokens.accessTokenExpires - ACCESS_TOKEN_EXPIRY_BUFFER_MS > Date.now();
-
-  if (stillValid) {
-    return tokens.accessToken!;
-  }
-
-  try {
-    const refreshed = await refreshGraphAccessToken(tokens.refreshToken);
-    saveOAuthTokens(userEmail, {
-      refreshToken: refreshed.refreshToken,
-      accessToken: refreshed.accessToken,
-      accessTokenExpires: refreshed.accessTokenExpires,
-    });
-    return refreshed.accessToken;
-  } catch (error) {
-    if (error instanceof InvalidGrantError) {
-      console.warn(`Sync en arrière-plan: token invalide pour ${userEmail}, reconnexion nécessaire.`);
-      deleteOAuthTokens(userEmail);
-    } else {
-      console.error(`Sync en arrière-plan: échec du rafraîchissement du token pour ${userEmail}`, error);
-    }
-    return null;
-  }
-}
 
 async function runBackgroundSyncCycle() {
   const userEmails = listUserEmailsWithSyncEnabled();

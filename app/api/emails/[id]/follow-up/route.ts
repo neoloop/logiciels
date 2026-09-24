@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth-options";
+import { getUsableAccessToken } from "@/lib/token-service";
 import { getGraphClient } from "@/lib/graph";
 import { getTrackedEmail, recordFollowUp } from "@/lib/db";
 
@@ -14,8 +15,13 @@ const DEFAULT_COMMENT =
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
-  if (!session?.accessToken || !session.user?.email) {
+  if (!session?.user?.email) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
+  const accessToken = await getUsableAccessToken(session.user.email);
+  if (!accessToken) {
+    return NextResponse.json({ error: "Session Microsoft expirée, reconnecte-toi." }, { status: 401 });
   }
 
   const { id } = await params;
@@ -35,7 +41,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // pas de corps JSON fourni, on garde le message par défaut
   }
 
-  const client = getGraphClient(session.accessToken);
+  const client = getGraphClient(accessToken);
 
   const draft = await client.api(`/me/messages/${id}/createReply`).post({ comment });
 
