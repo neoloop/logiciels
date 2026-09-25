@@ -70,6 +70,10 @@ npm install
 npm run dev
 ```
 
+**Sur Windows**, tu peux aussi double-cliquer sur `start-app.bat` (à la racine
+du projet) : il installe les dépendances si besoin et lance le serveur,
+sans avoir à ouvrir un terminal ni à naviguer vers le bon dossier.
+
 Ouvre [http://localhost:3000](http://localhost:3000), connecte-toi avec ton
 compte Microsoft 365, puis clique sur **Choisir des mails à suivre**.
 
