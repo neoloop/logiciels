@@ -1,0 +1,8 @@
+{
+  "name": "suivi-licences",
+  "version": "1.0.0",
+  "description": "Suivi des échéances de licences/abonnements avec relances SMTP — SIS 2B",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "nodemailer": "^6.9.16" }
+}

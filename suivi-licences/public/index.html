@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suivi des licences</title>
+<style>
+:root{
+  --bg:#f4f6f9; --card:#fff; --ink:#1d2733; --muted:#6b7785; --line:#dde3ea;
+  --navy:#1b3a5f; --navy2:#27507f;
+  --ok:#1e7e4a; --ok-bg:#e4f3ea; --warn:#b9770e; --warn-bg:#fdecd2;
+  --urg:#c0392b; --urg-bg:#fbe3e0; --exp:#fff; --exp-bg:#4a1c1c;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#12171d; --card:#1b222b; --ink:#e6ebf0; --muted:#93a0ae; --line:#2c3643;
+  --navy:#2b5486; --navy2:#3a6aa3;
+  --ok:#5ed08e; --ok-bg:#16301f; --warn:#f0b24a; --warn-bg:#3a2c12;
+  --urg:#ff8a7d; --urg-bg:#3d1a17; --exp:#fff; --exp-bg:#6a2323;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 "Segoe UI",system-ui,Arial,sans-serif}
+header{background:var(--navy);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header h1{margin:0;font-size:18px;font-weight:600;flex:1}
+header small{opacity:.8}
+main{padding:16px 20px;max-width:1500px;margin:0 auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px;cursor:pointer}
+.kpi.active{outline:2px solid var(--navy2)}
+.kpi b{display:block;font-size:24px}
+.kpi span{color:var(--muted);font-size:12px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.bar input[type=search]{flex:1;min-width:200px}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 12px;border-radius:6px;cursor:pointer}
+button:hover{border-color:var(--navy2)}
+button.primary{background:var(--navy2);border-color:var(--navy2);color:#fff}
+button.go{background:var(--ok);border-color:var(--ok);color:#fff}
+@media (prefers-color-scheme:dark){button.go{color:#0c1a11}}
+button.danger{color:var(--urg)}
+button.sm{padding:4px 9px;font-size:12px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:7px 9px;width:100%}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
+.tablewrap{background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:auto}
+table{border-collapse:collapse;width:100%}
+th{background:var(--navy);color:#fff;text-align:left;padding:9px 10px;font-weight:600;white-space:nowrap;cursor:pointer;position:sticky;top:0}
+td{padding:7px 10px;border-top:1px solid var(--line);vertical-align:middle}
+tr:nth-child(even) td{background:color-mix(in srgb,var(--line) 25%,transparent)}
+td.num{text-align:right;white-space:nowrap}
+.pill{display:inline-block;padding:3px 10px;border-radius:5px;font-weight:600;font-size:12px;white-space:nowrap}
+.OK{background:var(--ok-bg);color:var(--ok)}
+.AN{background:var(--warn-bg);color:var(--warn)}
+.UR{background:var(--urg-bg);color:var(--urg)}
+.EX{background:var(--exp-bg);color:var(--exp)}
+.muted{color:var(--muted)}
+.actions{white-space:nowrap;display:flex;gap:5px}
+dialog{border:1px solid var(--line);border-radius:10px;padding:0;background:var(--card);color:var(--ink);width:min(680px,94vw)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog form{padding:18px 20px}
+dialog h2{margin:0 0 12px;font-size:17px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid .full{grid-column:1/-1}
+.row-end{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.hint{font-size:12px;color:var(--muted);margin-top:4px}
+.calc{background:var(--ok-bg);color:var(--ok);padding:8px 10px;border-radius:6px;font-weight:600;margin-top:10px}
+.calc.warn{background:var(--warn-bg);color:var(--warn)}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;border-radius:8px;display:none;z-index:99;max-width:90vw}
+#toast.err{background:var(--urg);}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.journal li{margin:4px 0}
+@media (max-width:700px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Suivi des licences &amp; abonnements</h1>
+  <button id="btnConfig">⚙ Paramètres &amp; mails</button>
+  <button id="btnAdd" class="primary">＋ Nouveau logiciel</button>
+</header>
+<main>
+  <div class="kpis" id="kpis"></div>
+  <div class="bar">
+    <input type="search" id="q" placeholder="Rechercher (nom, éditeur, service, groupe…)">
+    <button id="btnExport">⬇ Export CSV</button>
+    <button id="btnRelance" title="Envoie maintenant le mail de relance pour toutes les licences dans la fenêtre d'alerte">✉ Relancer maintenant</button>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr id="thead"></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <p class="hint" id="legend"></p>
+</main>
+
+<!-- Fiche licence -->
+<dialog id="dlgLic"><form method="dialog" id="fLic">
+  <h2 id="licTitle">Nouveau logiciel</h2>
+  <div class="grid">
+    <div class="full"><label>Nom de la licence / abonnement *</label><input name="nom" required></div>
+    <div><label>Éditeur / Fournisseur</label><input name="editeur"></div>
+    <div><label>Nomenclature</label><input name="nomenclature" placeholder="ex : 6156"></div>
+    <div><label>Date de début de période *</label><input type="date" name="debut" required></div>
+    <div><label>Durée d'engagement *</label>
+      <select name="duree"><option value="1">1 an</option><option value="2">2 ans</option><option value="3">3 ans</option></select></div>
+    <div class="full"><div class="calc" id="calcLic"></div></div>
+    <div><label>Coût (€)</label><input type="number" step="0.01" name="cout"></div>
+    <div><label>Service (ex. 53, 58 — sert au routage des mails)</label><input name="service" list="svcList"><datalist id="svcList"></datalist></div>
+    <div><label>Groupement</label><input name="groupe" placeholder="DIR, OPS, GFOR…"></div>
+    <div><label>Relance mail</label>
+      <select name="relanceActive"><option value="1">Activée</option><option value="0">Suspendue (ne pas relancer)</option></select></div>
+    <div class="full"><label>Destinataires supplémentaires pour ce logiciel (séparés par virgule ou retour à la ligne)</label>
+      <textarea name="destinatairesExtra" rows="2" placeholder="s'ajoutent à la liste globale"></textarea></div>
+    <div class="full"><label>Commentaire</label><textarea name="commentaire" rows="2"></textarea></div>
+  </div>
+  <div class="row-end">
+    <button type="button" class="danger" id="btnDel" style="margin-right:auto">Supprimer</button>
+    <button type="button" id="licCancel">Annuler</button>
+    <button type="submit" class="primary">Enregistrer</button>
+  </div>
+</form></dialog>
+
+<!-- Commande faite -->
+<dialog id="dlgCmd"><form method="dialog" id="fCmd">
+  <h2>✔ Commande faite — réinitialiser le compteur</h2>
+  <p id="cmdIntro"></p>
+  <div class="grid">
+    <div><label>Nouveau début de période</label><input type="date" name="debut" required></div>
+    <div><label>Nouvelle durée d'engagement</label>
+      <select name="duree"><option value="1">1 an</option><option value="2">2 ans</option><option value="3">3 ans</option></select></div>
+    <div><label>Nouveau coût (€)</label><input type="number" step="0.01" name="cout"></div>
+    <div class="full"><div class="calc" id="calcCmd"></div></div>
+  </div>
+  <p class="hint">Par défaut, le nouveau cycle démarre à l'ancienne échéance (continuité du contrat). La relance s'arrête et le compteur repart de zéro.</p>
+  <div class="row-end">
+    <button type="button" id="cmdCancel">Annuler</button>
+    <button type="submit" class="go">Valider la commande</button>
+  </div>
+</form></dialog>
+
+<!-- Paramètres -->
+<dialog id="dlgCfg"><form method="dialog" id="fCfg">
+  <h2>Paramètres des relances par mail</h2>
+  <div class="grid">
+    <div class="full"><label>Destinataires des relances (un par ligne ou séparés par virgule) *</label>
+      <textarea name="destinataires" rows="4" placeholder="prenom.nom@example.org"></textarea></div>
+    <div class="full"><label>Routage par service — une ligne par service : <b>code : adresse1, adresse2</b> (ex. <code>53 : chef.service@example.org, responsable@example.org</code>)</label>
+      <textarea name="routage" rows="3" placeholder="53 : chef.service@example.org, responsable@example.org"></textarea>
+      <div class="hint">Les licences dont le champ « Service » vaut ce code partent <b>uniquement</b> vers ces adresses (un mail séparé par service). Les autres vont à la liste globale ci-dessus.</div></div>
+    <div><label>Prévenir X jours avant l'échéance</label><input type="number" min="1" name="alerteJours"></div>
+    <div><label>Puis relancer tous les X jours</label><input type="number" min="1" name="relanceJours"></div>
+    <div><label>Heure d'envoi quotidienne</label><input type="time" name="heureEnvoi"></div>
+    <div><label>URL de l'appli (lien dans le mail)</label><input name="urlAppli" placeholder="http://nas:8091"></div>
+    <div class="full"><label>Expéditeur</label><input name="expediteur"></div>
+    <div><label>Serveur SMTP</label><input name="host"></div>
+    <div><label>Port</label><input type="number" name="port"></div>
+    <div><label>Utilisateur SMTP (vide = sans authentification)</label><input name="user" autocomplete="off"></div>
+    <div><label>Mot de passe SMTP (vide = inchangé)</label><input type="password" name="pass" autocomplete="new-password"></div>
+    <div><label><input type="checkbox" name="secure" style="width:auto"> SSL direct (port 465)</label></div>
+    <div><label><input type="checkbox" name="ignoreTLSErrors" style="width:auto"> Ignorer les erreurs de certificat</label></div>
+  </div>
+  <h3 style="margin:18px 0 6px;font-size:14px">Journal des envois</h3>
+  <ul class="journal muted" id="journal" style="padding-left:18px;max-height:150px;overflow:auto;font-size:12px"></ul>
+  <div class="row-end">
+    <button type="button" id="cfgTest" style="margin-right:auto">✉ Envoyer un mail de test</button>
+    <button type="button" id="cfgCancel">Fermer</button>
+    <button type="submit" class="primary">Enregistrer</button>
+  </div>
+</form></dialog>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let S = {licences:[], config:{}, journal:[], today:''};
+let sortKey = 'joursRestants', sortDir = 1, filterStat = null, editing = null, cmdId = null;
+
+const COLS = [
+  ['nom','Licence / abonnement'],['editeur','Éditeur'],['nomenclature','Nomencl.'],['service','Service'],
+  ['debut','Début'],['duree','Durée'],['echeance','Échéance'],['joursRestants','Jours restants'],
+  ['statut','Statut'],['cout','Coût'],['groupe','Groupe'],['actions','']
+];
+
+const fr = d => d ? d.split('-').reverse().join('/') : '';
+const eur = n => n==null ? '' : n.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function cls(l){ if(!Number.isFinite(l.joursRestants)) return 'UR'; return l.joursRestants<0?'EX': l.joursRestants<=30?'UR': l.joursRestants<=S.config.alerteJours?'AN':'OK'; }
+function addYears(s,n){const [y,m,d]=s.split('-').map(Number);const t=new Date(Date.UTC(y+n,m-1,d));if(t.getUTCMonth()!==m-1)t.setUTCDate(0);return t.toISOString().slice(0,10);}
+function daysBetween(a,b){const u=s=>{const [y,m,d]=s.split('-').map(Number);return Date.UTC(y,m-1,d)};return Math.round((u(a)-u(b))/864e5);}
+
+function toast(msg, err){const t=$('#toast');t.textContent=msg;t.className=err?'err':'';t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',err?6000:3000);}
+async function api(method,url,body){
+  const r = await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error||('Erreur '+r.status));
+  return j;
+}
+async function refresh(){ S = await api('GET','/api/state'); render(); }
+
+function render(){
+  const a = S.config.alerteJours;
+  const L = S.licences;
+  const cnt = {EX:0,UR:0,AN:0,OK:0}; L.forEach(l=>cnt[cls(l)]++);
+  const kp = [['EX','Expirés',cnt.EX],['UR','Urgent (≤ 30 j)',cnt.UR],['AN',`À anticiper (≤ ${a} j)`,cnt.AN],['OK','OK',cnt.OK]];
+  $('#kpis').innerHTML = kp.map(([k,t,n])=>`<div class="kpi ${filterStat===k?'active':''}" data-k="${k}"><b><span class="pill ${k}">${n}</span></b><span>${t}</span></div>`).join('')
+    + `<div class="kpi" style="cursor:default"><b>${eur(L.filter(l=>l.joursRestants<=a).reduce((s,l)=>s+(l.cout||0),0))}</b><span>À commander (fenêtre ${a} j)</span></div>`;
+  document.querySelectorAll('.kpi[data-k]').forEach(e=>e.onclick=()=>{filterStat=filterStat===e.dataset.k?null:e.dataset.k;render();});
+
+  $('#thead').innerHTML = COLS.map(([k,t])=>`<th data-k="${k}">${t}${sortKey===k?(sortDir>0?' ▲':' ▼'):''}</th>`).join('');
+  document.querySelectorAll('#thead th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(k==='actions')return;sortDir=sortKey===k?-sortDir:1;sortKey=k;render();});
+
+  const q = $('#q').value.trim().toLowerCase();
+  let rows = L.filter(l=>(!filterStat||cls(l)===filterStat) &&
+    (!q || [l.nom,l.editeur,l.service,l.groupe,l.nomenclature,l.commentaire].join(' ').toLowerCase().includes(q)));
+  rows.sort((x,y)=>{let a=x[sortKey],b=y[sortKey];if(a==null)a='';if(b==null)b='';return (typeof a==='number'&&typeof b==='number'?a-b:String(a).localeCompare(String(b),'fr'))*sortDir;});
+
+  $('#tbody').innerHTML = rows.map(l=>{
+    const c = cls(l);
+    const lab = l.statut + (!l.relanceActive?' · relance off':'');
+    return `<tr>
+      <td><b>${esc(l.nom)}</b>${l.commentaire?`<div class="hint">${esc(l.commentaire)}</div>`:''}</td>
+      <td>${esc(l.editeur)}</td><td>${esc(l.nomenclature)}</td><td>${esc(l.service)}</td>
+      <td class="num">${fr(l.debut)}</td><td class="num">${l.duree} an${l.duree>1?'s':''}</td>
+      <td class="num">${fr(l.echeance)}</td>
+      <td class="num"><b class="${c}" style="background:none">${l.joursRestants}</b></td>
+      <td><span class="pill ${c}">${esc(lab)}</span></td>
+      <td class="num">${eur(l.cout)}</td><td>${esc(l.groupe)}</td>
+      <td><div class="actions"><button class="sm go" data-cmd="${l.id}" title="Commande passée : réinitialise le compteur">✔ Commande faite</button><button class="sm" data-edit="${l.id}">Modifier</button></div></td>
+    </tr>`;}).join('') || `<tr><td colspan="12" class="muted" style="padding:20px;text-align:center">Aucun résultat</td></tr>`;
+  document.querySelectorAll('[data-cmd]').forEach(b=>b.onclick=()=>openCmd(b.dataset.cmd));
+  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openLic(b.dataset.edit));
+  $('#legend').textContent = `Alerte mail ${a} jours avant l'échéance, puis relance tous les ${S.config.relanceJours} jours à ${S.config.heureEnvoi} jusqu'à « Commande faite ». Destinataires : ${S.config.destinataires.length?S.config.destinataires.join(', '):'⚠ aucun configuré (⚙ Paramètres)'}.`;
+}
+
+// ----- Fiche licence -----
+const fLic = $('#fLic');
+function calcLic(){
+  const d=fLic.debut.value, n=+fLic.duree.value;
+  const box=$('#calcLic');
+  if(!d){box.textContent='Renseigne la date de début pour calculer l\'échéance.';box.className='calc warn';return;}
+  const e=addYears(d,n), j=daysBetween(e,S.today);
+  box.textContent=`Fin d'engagement calculée : ${fr(e)}  (${j>=0?'dans '+j+' jours':'expirée depuis '+(-j)+' jours'})`;
+  box.className='calc'+(j<=S.config.alerteJours?' warn':'');
+}
+fLic.debut.oninput=fLic.duree.onchange=calcLic;
+function openLic(id){
+  $('#svcList').innerHTML=Object.keys(S.config.routageServices||{}).map(k=>`<option value="${esc(k)}">`).join('');
+  editing = id ? S.licences.find(l=>l.id===id) : null;
+  $('#licTitle').textContent = editing?'Modifier le logiciel':'Nouveau logiciel';
+  $('#btnDel').style.display = editing?'':'none';
+  const l = editing || {nom:'',editeur:'',nomenclature:'',debut:S.today,duree:1,cout:'',service:'',groupe:'',commentaire:'',relanceActive:true,destinatairesExtra:[]};
+  fLic.nom.value=l.nom; fLic.editeur.value=l.editeur; fLic.nomenclature.value=l.nomenclature;
+  fLic.debut.value=l.debut; fLic.duree.value=l.duree; fLic.cout.value=l.cout??''; fLic.service.value=l.service;
+  fLic.groupe.value=l.groupe; fLic.commentaire.value=l.commentaire; fLic.relanceActive.value=l.relanceActive?'1':'0';
+  fLic.destinatairesExtra.value=(l.destinatairesExtra||[]).join('\n');
+  calcLic(); $('#dlgLic').showModal();
+}
+$('#licCancel').onclick=()=>$('#dlgLic').close();
+fLic.onsubmit = async e=>{
+  e.preventDefault();
+  const body={nom:fLic.nom.value,editeur:fLic.editeur.value,nomenclature:fLic.nomenclature.value,debut:fLic.debut.value,
+    duree:+fLic.duree.value,cout:fLic.cout.value,service:fLic.service.value,groupe:fLic.groupe.value,
+    commentaire:fLic.commentaire.value,relanceActive:fLic.relanceActive.value==='1',
+    destinatairesExtra:fLic.destinatairesExtra.value.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean)};
+  try{
+    editing ? await api('PUT','/api/licences/'+editing.id,body) : await api('POST','/api/licences',body);
+    $('#dlgLic').close(); await refresh(); toast(editing?'Modifications enregistrées':'Logiciel ajouté');
+  }catch(err){toast(err.message,true);}
+};
+$('#btnDel').onclick=async()=>{
+  if(!editing||!confirm(`Supprimer définitivement « ${editing.nom} » ?`))return;
+  try{await api('DELETE','/api/licences/'+editing.id);$('#dlgLic').close();await refresh();toast('Supprimé');}catch(err){toast(err.message,true);}
+};
+$('#btnAdd').onclick=()=>openLic(null);
+
+// ----- Commande faite -----
+const fCmd=$('#fCmd');
+function calcCmd(){
+  if(!fCmd.debut.value)return;
+  const e=addYears(fCmd.debut.value,+fCmd.duree.value);
+  $('#calcCmd').textContent=`Nouvelle échéance : ${fr(e)}  (dans ${daysBetween(e,S.today)} jours)`;
+}
+fCmd.debut.oninput=fCmd.duree.onchange=calcCmd;
+function openCmd(id){
+  const l=S.licences.find(x=>x.id===id); cmdId=id;
+  $('#cmdIntro').innerHTML=`<b>${esc(l.nom)}</b> — échéance actuelle ${fr(l.echeance)} (${l.joursRestants} j).`;
+  fCmd.debut.value=l.echeance; fCmd.duree.value=l.duree; fCmd.cout.value=l.cout??'';
+  calcCmd(); $('#dlgCmd').showModal();
+}
+$('#cmdCancel').onclick=()=>$('#dlgCmd').close();
+fCmd.onsubmit=async e=>{
+  e.preventDefault();
+  try{
+    await api('POST',`/api/licences/${cmdId}/commande`,{debut:fCmd.debut.value,duree:+fCmd.duree.value,cout:fCmd.cout.value});
+    $('#dlgCmd').close(); await refresh(); toast('Compteur réinitialisé — relances arrêtées pour ce logiciel');
+  }catch(err){toast(err.message,true);}
+};
+
+// ----- Paramètres -----
+const fCfg=$('#fCfg');
+function openCfg(){
+  const c=S.config;
+  fCfg.destinataires.value=c.destinataires.join('\n');
+  fCfg.routage.value=Object.entries(c.routageServices||{}).map(([k,v])=>k+' : '+v.join(', ')).join('\n'); fCfg.alerteJours.value=c.alerteJours; fCfg.relanceJours.value=c.relanceJours;
+  fCfg.heureEnvoi.value=c.heureEnvoi; fCfg.urlAppli.value=c.urlAppli; fCfg.expediteur.value=c.expediteur;
+  fCfg.host.value=c.smtp.host; fCfg.port.value=c.smtp.port; fCfg.user.value=c.smtp.user; fCfg.pass.value='';
+  fCfg.secure.checked=c.smtp.secure; fCfg.ignoreTLSErrors.checked=c.smtp.ignoreTLSErrors;
+  $('#journal').innerHTML=S.journal.slice(0,30).map(j=>{
+    const d=new Date(j.date).toLocaleString('fr-FR',{timeZone:'Europe/Paris'});
+    const t={relance:'Relance',test:'Test',commande:'Commande'}[j.type]||j.type;
+    return `<li>${d} — ${t} ${j.ok?'✔':'✘'} ${esc(j.nb?j.nb+' licence(s)':'')} ${esc(j.detail||'')} ${j.destinataires?'→ '+esc(j.destinataires.join(', ')):''} ${j.erreur?'<b>'+esc(j.erreur)+'</b>':''}</li>`;}).join('')||'<li>Aucun envoi pour le moment</li>';
+  $('#dlgCfg').showModal();
+}
+function parseRoutage(txt){
+  const o={};
+  txt.split('\n').forEach(line=>{
+    const i=line.indexOf(':'); if(i<0) return;
+    const k=line.slice(0,i).trim(); if(!k) return;
+    o[k]=line.slice(i+1).split(/[,;\s]+/).map(x=>x.trim()).filter(Boolean);
+  });
+  return o;
+}
+function cfgBody(){
+  return {routageServices:parseRoutage(fCfg.routage.value),destinataires:fCfg.destinataires.value.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean),
+    alerteJours:fCfg.alerteJours.value,relanceJours:fCfg.relanceJours.value,heureEnvoi:fCfg.heureEnvoi.value,
+    urlAppli:fCfg.urlAppli.value,expediteur:fCfg.expediteur.value,
+    smtp:{host:fCfg.host.value,port:fCfg.port.value,user:fCfg.user.value,pass:fCfg.pass.value,secure:fCfg.secure.checked,ignoreTLSErrors:fCfg.ignoreTLSErrors.checked}};
+}
+$('#btnConfig').onclick=openCfg;
+$('#cfgCancel').onclick=()=>$('#dlgCfg').close();
+fCfg.onsubmit=async e=>{e.preventDefault();try{await api('POST','/api/config',cfgBody());$('#dlgCfg').close();await refresh();toast('Paramètres enregistrés');}catch(err){toast(err.message,true);}};
+$('#cfgTest').onclick=async()=>{
+  try{await api('POST','/api/config',cfgBody());await refresh();toast('Envoi du mail de test…');
+    const r=await api('POST','/api/test-mail'); toast('Mail de test envoyé à '+r.destinataires.join(', '));}
+  catch(err){toast(err.message,true);}
+  await refresh();
+};
+$('#btnRelance').onclick=async()=>{
+  if(!confirm('Envoyer maintenant le mail de relance à tous les destinataires pour les licences dans la fenêtre d\'alerte ?'))return;
+  try{const r=await api('POST','/api/relance-maintenant');toast(r.envoye?`Relance envoyée (${r.nb} licence(s))`:'Rien à relancer pour le moment');await refresh();}
+  catch(err){toast(err.message,true);}
+};
+
+// ----- Export CSV -----
+$('#btnExport').onclick=()=>{
+  const h=['Nom','Éditeur','Nomenclature','Début','Durée (ans)','Échéance','Jours restants','Statut','Coût','Groupe','Commentaire'];
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const lines=[h.map(q).join(';')].concat(S.licences.map(l=>[l.nom,l.editeur,l.nomenclature,fr(l.debut),l.duree,fr(l.echeance),l.joursRestants,l.statut,l.cout==null?'':String(l.cout).replace('.',','),l.groupe,l.commentaire].map(q).join(';')));
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv'}));
+  a.download='licences_'+S.today+'.csv';a.click();
+};
+$('#q').oninput=render;
+refresh().catch(e=>toast(e.message,true));
+</script>
+</body>
+</html>

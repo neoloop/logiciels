@@ -1,0 +1,8 @@
+services:
+  suivi-licences:
+    build: .
+    container_name: suivi-licences
+    restart: unless-stopped
+    ports: ["8091:8091"]
+    environment: { TZ: Europe/Paris }
+    volumes: ["./data:/data"]
