@@ -1,5 +1,7 @@
 # Suivi des licences & abonnements
 
+🇫🇷 Français · 🇬🇧 [English](README.en.md)
+
 Petite application web auto-hébergée pour **suivre les échéances de licences, maintenances et abonnements logiciels**, et **relancer par mail** quand il faut passer commande. Aucune base de données ni framework : un serveur Node et un fichier JSON.
 
 ## Aperçu
@@ -242,6 +244,10 @@ Variables d'environnement : `PORT` (8091), `DATA_DIR` (`./data`), `TZ`.
 ## Sécurité
 
 L'application **n'a pas d'authentification** : elle est prévue pour un réseau interne. Ne pas l'exposer sur Internet sans reverse proxy authentifié. Le mot de passe SMTP éventuel est stocké en clair dans `data/data.json` (dossier exclu du dépôt).
+
+## Licence
+
+[MIT](../LICENSE).
 
 ## Soutenir le projet
 
