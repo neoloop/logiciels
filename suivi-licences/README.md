@@ -26,6 +26,14 @@ Mail de relance reçu par les destinataires du service concerné :
 
 ![Mail de relance](docs/screenshots/05-mail-relance.png)
 
+Protection par mot de passe (page de connexion et fenêtre Sécurité) :
+
+![Connexion](docs/screenshots/07-connexion.png)
+
+![Sécurité](docs/screenshots/06-securite.png)
+
+> Interface et mails disponibles en **français et anglais** (sélecteur FR/EN en haut ; langue des mails dans les paramètres).
+
 ## Fonctionnalités
 
 - **Durée d'engagement** de 1, 2 ou 3 ans : la date de fin est calculée automatiquement à partir du début de période.
@@ -195,7 +203,8 @@ Ouvrir `http://adresse-du-serveur:8091`, puis **⚙ Paramètres & mails** :
 4. **Routage par service** (optionnel) : pour qu'un service reçoive ses propres relances, une ligne par service au format `53 : chef@exemple.org, responsable@exemple.org`. Les licences dont le champ **Service** vaut `53` partent alors uniquement vers ces adresses, dans un mail séparé.
 5. **URL de l'appli** : l'adresse de l'application, ajoutée en lien dans les mails pour marquer les commandes comme faites.
 6. Cliquer sur **Envoyer un mail de test** pour valider le relais. Les erreurs d'envoi apparaissent dans le *Journal des envois*, en bas de la fenêtre.
-7. **Enregistrer**.
+7. **Langue des mails** (français ou anglais), puis **Enregistrer**.
+8. Cliquer sur **🔒 Sécurité** pour définir un mot de passe.
 
 Les licences d'exemple servent à tester : les supprimer (*Modifier* > *Supprimer*), puis ajouter les vraies avec **+ Nouveau logiciel**. Renseigner le champ **Service** des licences concernées par le routage.
 
@@ -239,11 +248,15 @@ Tout l'état (licences, paramètres, journal) est dans `data/data.json`. Le copi
 | Relance tous les | 7 jours |
 | Heure d'envoi quotidienne | 08:00 (fuseau `TZ`, `Europe/Paris` par défaut) |
 
-Variables d'environnement : `PORT` (8091), `DATA_DIR` (`./data`), `TZ`.
+Variables d'environnement : `PORT` (8091), `DATA_DIR` (`./data`), `TZ`, `APP_USER` / `APP_PASSWORD` (optionnelles, activent la protection par mot de passe), `TRUST_PROXY` (`1` derrière un reverse proxy).
 
 ## Sécurité
 
-L'application **n'a pas d'authentification** : elle est prévue pour un réseau interne. Ne pas l'exposer sur Internet sans reverse proxy authentifié. Le mot de passe SMTP éventuel est stocké en clair dans `data/data.json` (dossier exclu du dépôt).
+- **Protection par mot de passe** : au départ l'application est ouverte (pour faciliter la première installation) et un bandeau le rappelle. Cliquer sur **🔒 Sécurité** pour définir un identifiant et un mot de passe (8 caractères minimum). Les mots de passe sont stockés hachés (scrypt) ; la session est un cookie signé `HttpOnly`, `SameSite=Strict`, valable 12 h. Après 5 échecs, l'IP est bloquée 5 minutes.
+- **Géré par le serveur** : définir les variables d'environnement `APP_USER` et `APP_PASSWORD` (par ex. dans `docker-compose.yml`) ; le mot de passe n'est alors modifiable que sur le serveur.
+- **Verrouillé dehors ?** Arrêter l'application, supprimer l'entrée `"auth"` de `data/data.json` (ou la lancer une fois avec `APP_PASSWORD=...`) puis relancer.
+- **HTTPS** : l'application parle en HTTP simple. Hors réseau local de confiance, la placer derrière un reverse proxy TLS (le cookie est alors marqué `Secure`) ; si le proxy transmet l'IP du client, définir `TRUST_PROXY=1` pour que le blocage fonctionne par client.
+- Le mot de passe SMTP éventuel est stocké en clair dans `data/data.json` (droits `600`, dossier exclu du dépôt) et n'est jamais renvoyé au navigateur.
 
 ## Licence
 

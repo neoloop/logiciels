@@ -6,7 +6,7 @@
 
 🇫🇷 Application web de suivi des échéances de licences et abonnements logiciels, avec relances par mail (SMTP) par service. Node.js sans dépendance lourde, données dans un fichier JSON. Voir le [README en français](suivi-licences/README.md).
 
-🇬🇧 Web app to track software license and subscription renewals, with per-department e-mail reminders (SMTP). Plain Node.js, data stored in a JSON file. See the [English README](suivi-licences/README.en.md). The interface is currently in French.
+🇬🇧 Web app to track software license and subscription renewals, with per-department e-mail reminders (SMTP). Plain Node.js, data stored in a JSON file. See the [English README](suivi-licences/README.en.md). The interface is available in French and English.
 
 ## Licence / License
 

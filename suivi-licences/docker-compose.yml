@@ -4,5 +4,8 @@ services:
     container_name: suivi-licences
     restart: unless-stopped
     ports: ["8091:8091"]
-    environment: { TZ: Europe/Paris }
+    environment:
+      TZ: Europe/Paris
+      # APP_USER: admin
+      # APP_PASSWORD: change-me-please
     volumes: ["./data:/data"]

@@ -67,21 +67,34 @@ dialog h2{margin:0 0 12px;font-size:17px}
 #toast.err{background:var(--urg);}
 .tabs{display:flex;gap:6px;margin-bottom:10px}
 .journal li{margin:4px 0}
+.banner{background:var(--warn-bg);color:var(--warn);padding:9px 20px;display:none;align-items:center;gap:12px;flex-wrap:wrap;font-weight:600}
+.banner.show{display:flex}
+select.langsel{width:auto;padding:5px 8px;background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
+select.langsel option{color:#000}
+header button{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
+header button.primary{background:var(--navy2);border-color:rgba(255,255,255,.6)}
+#dlgLogin{width:min(380px,94vw)}
+.locked header button,.locked main{visibility:hidden}
+.err-msg{color:var(--urg);font-size:12px;min-height:16px;margin-top:6px}
 @media (max-width:700px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header>
-  <h1>Suivi des licences &amp; abonnements</h1>
-  <button id="btnConfig">⚙ Paramètres &amp; mails</button>
-  <button id="btnAdd" class="primary">＋ Nouveau logiciel</button>
+  <h1 data-i18n="app.h1"></h1>
+  <select id="langSel" class="langsel" aria-label="Language"><option value="fr">FR</option><option value="en">EN</option></select>
+  <button id="btnSec" data-i18n="btn.sec"></button>
+  <button id="btnLogout" data-i18n="btn.logout" style="display:none"></button>
+  <button id="btnConfig" data-i18n="btn.cfg"></button>
+  <button id="btnAdd" class="primary" data-i18n="btn.add"></button>
 </header>
+<div class="banner" id="banner"><span data-i18n="banner.noauth"></span><button id="bannerBtn" data-i18n="banner.noauth.btn"></button></div>
 <main>
   <div class="kpis" id="kpis"></div>
   <div class="bar">
-    <input type="search" id="q" placeholder="Rechercher (nom, éditeur, service, groupe…)">
-    <button id="btnExport">⬇ Export CSV</button>
-    <button id="btnRelance" title="Envoie maintenant le mail de relance pour toutes les licences dans la fenêtre d'alerte">✉ Relancer maintenant</button>
+    <input type="search" id="q" data-i18n-ph="search.ph">
+    <button id="btnExport" data-i18n="btn.export"></button>
+    <button id="btnRelance" data-i18n="btn.relance" data-i18n-title="btn.relance.tip"></button>
   </div>
   <div class="tablewrap">
     <table>
@@ -92,159 +105,247 @@ dialog h2{margin:0 0 12px;font-size:17px}
   <p class="hint" id="legend"></p>
 </main>
 
-<!-- Fiche licence -->
-<dialog id="dlgLic"><form method="dialog" id="fLic">
-  <h2 id="licTitle">Nouveau logiciel</h2>
-  <div class="grid">
-    <div class="full"><label>Nom de la licence / abonnement *</label><input name="nom" required></div>
-    <div><label>Éditeur / Fournisseur</label><input name="editeur"></div>
-    <div><label>Nomenclature</label><input name="nomenclature" placeholder="ex : 6156"></div>
-    <div><label>Date de début de période *</label><input type="date" name="debut" required></div>
-    <div><label>Durée d'engagement *</label>
-      <select name="duree"><option value="1">1 an</option><option value="2">2 ans</option><option value="3">3 ans</option></select></div>
-    <div class="full"><div class="calc" id="calcLic"></div></div>
-    <div><label>Coût (€)</label><input type="number" step="0.01" name="cout"></div>
-    <div><label>Service (ex. 53, 58 — sert au routage des mails)</label><input name="service" list="svcList"><datalist id="svcList"></datalist></div>
-    <div><label>Groupement</label><input name="groupe" placeholder="DIR, OPS, GFOR…"></div>
-    <div><label>Relance mail</label>
-      <select name="relanceActive"><option value="1">Activée</option><option value="0">Suspendue (ne pas relancer)</option></select></div>
-    <div class="full"><label>Destinataires supplémentaires pour ce logiciel (séparés par virgule ou retour à la ligne)</label>
-      <textarea name="destinatairesExtra" rows="2" placeholder="s'ajoutent à la liste globale"></textarea></div>
-    <div class="full"><label>Commentaire</label><textarea name="commentaire" rows="2"></textarea></div>
+<!-- Login -->
+<dialog id="dlgLogin"><form method="dialog" id="fLogin">
+  <h2 data-i18n="login.title"></h2>
+  <label data-i18n="login.user"></label><input name="user" autocomplete="username" required>
+  <label style="margin-top:10px" data-i18n="login.pass"></label><input type="password" name="password" autocomplete="current-password" required>
+  <div class="err-msg" id="loginErr"></div>
+  <div class="row-end"><button type="submit" class="primary" data-i18n="login.btn"></button></div>
+</form></dialog>
+
+<!-- Sécurité -->
+<dialog id="dlgSec"><form method="dialog" id="fSec">
+  <h2 data-i18n="sec.title"></h2>
+  <p id="secState" class="hint"></p>
+  <div class="grid" id="secFields">
+    <div class="full"><label data-i18n="sec.user"></label><input name="user" autocomplete="username"></div>
+    <div class="full" id="secCurRow"><label data-i18n="sec.cur"></label><input type="password" name="cur" autocomplete="current-password"></div>
+    <div><label data-i18n="sec.new"></label><input type="password" name="pw" autocomplete="new-password"></div>
+    <div><label data-i18n="sec.new2"></label><input type="password" name="pw2" autocomplete="new-password"></div>
   </div>
   <div class="row-end">
-    <button type="button" class="danger" id="btnDel" style="margin-right:auto">Supprimer</button>
-    <button type="button" id="licCancel">Annuler</button>
-    <button type="submit" class="primary">Enregistrer</button>
+    <button type="button" class="danger" id="secOff" style="margin-right:auto" data-i18n="sec.disable"></button>
+    <button type="button" id="secCancel" data-i18n="btn.close"></button>
+    <button type="submit" class="primary" id="secSave" data-i18n="sec.set"></button>
+  </div>
+</form></dialog>
+
+<!-- Fiche licence -->
+<dialog id="dlgLic"><form method="dialog" id="fLic">
+  <h2 id="licTitle"></h2>
+  <div class="grid">
+    <div class="full"><label data-i18n="lic.nom"></label><input name="nom" required></div>
+    <div><label data-i18n="lic.editeur"></label><input name="editeur"></div>
+    <div><label data-i18n="lic.nomenclature"></label><input name="nomenclature" data-i18n-ph="lic.nomenclature.ph"></div>
+    <div><label data-i18n="lic.debut"></label><input type="date" name="debut" required></div>
+    <div><label data-i18n="lic.duree"></label>
+      <select name="duree"><option value="1" class="y1"></option><option value="2" class="y2"></option><option value="3" class="y3"></option></select></div>
+    <div class="full"><div class="calc" id="calcLic"></div></div>
+    <div><label data-i18n="lic.cout"></label><input type="number" step="0.01" name="cout"></div>
+    <div><label data-i18n="lic.service"></label><input name="service" list="svcList"><datalist id="svcList"></datalist></div>
+    <div><label data-i18n="lic.groupe"></label><input name="groupe" data-i18n-ph="lic.groupe.ph"></div>
+    <div><label data-i18n="lic.relance"></label>
+      <select name="relanceActive"><option value="1" data-i18n="lic.relance.on"></option><option value="0" data-i18n="lic.relance.off"></option></select></div>
+    <div class="full"><label data-i18n="lic.extra"></label>
+      <textarea name="destinatairesExtra" rows="2" data-i18n-ph="lic.extra.ph"></textarea></div>
+    <div class="full"><label data-i18n="lic.comment"></label><textarea name="commentaire" rows="2"></textarea></div>
+  </div>
+  <div class="row-end">
+    <button type="button" class="danger" id="btnDel" style="margin-right:auto" data-i18n="lic.del"></button>
+    <button type="button" id="licCancel" data-i18n="btn.cancel"></button>
+    <button type="submit" class="primary" data-i18n="btn.save"></button>
   </div>
 </form></dialog>
 
 <!-- Commande faite -->
 <dialog id="dlgCmd"><form method="dialog" id="fCmd">
-  <h2>✔ Commande faite — réinitialiser le compteur</h2>
+  <h2 data-i18n="cmd.title"></h2>
   <p id="cmdIntro"></p>
   <div class="grid">
-    <div><label>Nouveau début de période</label><input type="date" name="debut" required></div>
-    <div><label>Nouvelle durée d'engagement</label>
-      <select name="duree"><option value="1">1 an</option><option value="2">2 ans</option><option value="3">3 ans</option></select></div>
-    <div><label>Nouveau coût (€)</label><input type="number" step="0.01" name="cout"></div>
+    <div><label data-i18n="cmd.debut"></label><input type="date" name="debut" required></div>
+    <div><label data-i18n="cmd.duree"></label>
+      <select name="duree"><option value="1" class="y1"></option><option value="2" class="y2"></option><option value="3" class="y3"></option></select></div>
+    <div><label data-i18n="cmd.cout"></label><input type="number" step="0.01" name="cout"></div>
     <div class="full"><div class="calc" id="calcCmd"></div></div>
   </div>
-  <p class="hint">Par défaut, le nouveau cycle démarre à l'ancienne échéance (continuité du contrat). La relance s'arrête et le compteur repart de zéro.</p>
+  <p class="hint" data-i18n="cmd.hint"></p>
   <div class="row-end">
-    <button type="button" id="cmdCancel">Annuler</button>
-    <button type="submit" class="go">Valider la commande</button>
+    <button type="button" id="cmdCancel" data-i18n="btn.cancel"></button>
+    <button type="submit" class="go" data-i18n="cmd.ok"></button>
   </div>
 </form></dialog>
 
 <!-- Paramètres -->
 <dialog id="dlgCfg"><form method="dialog" id="fCfg">
-  <h2>Paramètres des relances par mail</h2>
+  <h2 data-i18n="cfg.title"></h2>
   <div class="grid">
-    <div class="full"><label>Destinataires des relances (un par ligne ou séparés par virgule) *</label>
-      <textarea name="destinataires" rows="4" placeholder="prenom.nom@example.org"></textarea></div>
-    <div class="full"><label>Routage par service — une ligne par service : <b>code : adresse1, adresse2</b> (ex. <code>53 : chef.service@example.org, responsable@example.org</code>)</label>
-      <textarea name="routage" rows="3" placeholder="53 : chef.service@example.org, responsable@example.org"></textarea>
-      <div class="hint">Les licences dont le champ « Service » vaut ce code partent <b>uniquement</b> vers ces adresses (un mail séparé par service). Les autres vont à la liste globale ci-dessus.</div></div>
-    <div><label>Prévenir X jours avant l'échéance</label><input type="number" min="1" name="alerteJours"></div>
-    <div><label>Puis relancer tous les X jours</label><input type="number" min="1" name="relanceJours"></div>
-    <div><label>Heure d'envoi quotidienne</label><input type="time" name="heureEnvoi"></div>
-    <div><label>URL de l'appli (lien dans le mail)</label><input name="urlAppli" placeholder="http://nas:8091"></div>
-    <div class="full"><label>Expéditeur</label><input name="expediteur"></div>
-    <div><label>Serveur SMTP</label><input name="host"></div>
-    <div><label>Port</label><input type="number" name="port"></div>
-    <div><label>Utilisateur SMTP (vide = sans authentification)</label><input name="user" autocomplete="off"></div>
-    <div><label>Mot de passe SMTP (vide = inchangé)</label><input type="password" name="pass" autocomplete="new-password"></div>
-    <div><label><input type="checkbox" name="secure" style="width:auto"> SSL direct (port 465)</label></div>
-    <div><label><input type="checkbox" name="ignoreTLSErrors" style="width:auto"> Ignorer les erreurs de certificat</label></div>
+    <div class="full"><label data-i18n="cfg.dest"></label>
+      <textarea name="destinataires" rows="4" placeholder="first.last@example.org"></textarea></div>
+    <div class="full"><label data-i18n-html="cfg.routage"></label>
+      <textarea name="routage" rows="3" placeholder="53 : head@example.org, manager@example.org"></textarea>
+      <div class="hint" data-i18n-html="cfg.routage.hint"></div></div>
+    <div><label data-i18n="cfg.alerte"></label><input type="number" min="1" name="alerteJours"></div>
+    <div><label data-i18n="cfg.relance"></label><input type="number" min="1" name="relanceJours"></div>
+    <div><label data-i18n="cfg.heure"></label><input type="time" name="heureEnvoi"></div>
+    <div><label data-i18n="cfg.lang"></label><select name="langue"><option value="fr">Français</option><option value="en">English</option></select></div>
+    <div class="full"><label data-i18n="cfg.url"></label><input name="urlAppli" placeholder="http://nas:8091"></div>
+    <div class="full"><label data-i18n="cfg.exp"></label><input name="expediteur"></div>
+    <div><label data-i18n="cfg.host"></label><input name="host"></div>
+    <div><label data-i18n="cfg.port"></label><input type="number" name="port"></div>
+    <div><label data-i18n="cfg.user"></label><input name="user" autocomplete="off"></div>
+    <div><label data-i18n="cfg.pass"></label><input type="password" name="pass" autocomplete="new-password"></div>
+    <div><label><input type="checkbox" name="secure" style="width:auto"> <span data-i18n="cfg.secure"></span></label></div>
+    <div><label><input type="checkbox" name="ignoreTLSErrors" style="width:auto"> <span data-i18n="cfg.tls"></span></label></div>
   </div>
-  <h3 style="margin:18px 0 6px;font-size:14px">Journal des envois</h3>
+  <h3 style="margin:18px 0 6px;font-size:14px" data-i18n="cfg.journal"></h3>
   <ul class="journal muted" id="journal" style="padding-left:18px;max-height:150px;overflow:auto;font-size:12px"></ul>
   <div class="row-end">
-    <button type="button" id="cfgTest" style="margin-right:auto">✉ Envoyer un mail de test</button>
-    <button type="button" id="cfgCancel">Fermer</button>
-    <button type="submit" class="primary">Enregistrer</button>
+    <button type="button" id="cfgTest" style="margin-right:auto" data-i18n="cfg.test"></button>
+    <button type="button" id="cfgCancel" data-i18n="btn.close"></button>
+    <button type="submit" class="primary" data-i18n="btn.save"></button>
   </div>
 </form></dialog>
 <div id="toast"></div>
 
+<script src="i18n.js"></script>
 <script>
 const $ = s => document.querySelector(s);
-let S = {licences:[], config:{}, journal:[], today:''};
-let sortKey = 'joursRestants', sortDir = 1, filterStat = null, editing = null, cmdId = null;
+let S = {licences:[], config:{}, journal:[], today:'', auth:{}};
+let sortKey = 'joursRestants', sortDir = 1, filterStat = null, editing = null, cmdId = null, authReq = false;
 
-const COLS = [
-  ['nom','Licence / abonnement'],['editeur','Éditeur'],['nomenclature','Nomencl.'],['service','Service'],
-  ['debut','Début'],['duree','Durée'],['echeance','Échéance'],['joursRestants','Jours restants'],
-  ['statut','Statut'],['cout','Coût'],['groupe','Groupe'],['actions','']
-];
+const COLS = ['nom','editeur','nomenclature','service','debut','duree','echeance','joursRestants','statut','cout','groupe','actions'];
+const CLS = {invalid:'UR', expired:'EX', urgent:'UR', soon:'AN', ok:'OK'};
+const cls = l => CLS[l.statutCode] || 'UR';
+const statLabel = l => t('st.'+l.statutCode);
 
-const fr = d => d ? d.split('-').reverse().join('/') : '';
-const eur = n => n==null ? '' : n.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
+const isFr = () => getLang()==='fr';
+const fd = d => !d ? '' : (isFr() ? d.split('-').reverse().join('/') : d);
+const eur = n => { if(n==null||!Number.isFinite(n)) return ''; const [i,dd]=Math.abs(n).toFixed(2).split('.'); const neg=n<0?'-':'';
+  return isFr() ? neg+i.replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f')+','+dd+'\u00a0€' : neg+'€'+i.replace(/\B(?=(\d{3})+(?!\d))/g,',')+'.'+dd; };
+const yrs = n => n===1 ? t('years.1') : t('years.n', n);
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function cls(l){ if(!Number.isFinite(l.joursRestants)) return 'UR'; return l.joursRestants<0?'EX': l.joursRestants<=30?'UR': l.joursRestants<=S.config.alerteJours?'AN':'OK'; }
 function addYears(s,n){const [y,m,d]=s.split('-').map(Number);const t=new Date(Date.UTC(y+n,m-1,d));if(t.getUTCMonth()!==m-1)t.setUTCDate(0);return t.toISOString().slice(0,10);}
 function daysBetween(a,b){const u=s=>{const [y,m,d]=s.split('-').map(Number);return Date.UTC(y,m-1,d)};return Math.round((u(a)-u(b))/864e5);}
 
 function toast(msg, err){const t=$('#toast');t.textContent=msg;t.className=err?'err':'';t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',err?6000:3000);}
 async function api(method,url,body){
-  const r = await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+  const r = await fetch(url,{method,headers:{'Content-Type':'application/json','X-Lang':getLang()},body:method==='GET'?undefined:JSON.stringify(body||{}),credentials:'same-origin'});
   const j = await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error(j.error||('Erreur '+r.status));
+  if(r.status===401 && !url.startsWith('/api/login')){ showLogin(); throw new Error(j.error||t('err.generic',401)); }
+  if(!r.ok) throw new Error(j.error||t('err.generic',r.status));
   return j;
 }
-async function refresh(){ S = await api('GET','/api/state'); render(); }
+function closeAll(){ document.querySelectorAll('dialog[open]').forEach(d=>d.close()); }
+function showLogin(){ document.body.classList.add('locked'); closeAll(); const d=$('#dlgLogin'); if(!d.open){ $('#loginErr').textContent=''; d.showModal(); } }
+$('#dlgLogin').addEventListener('cancel',e=>e.preventDefault());
+
+async function boot(){
+  try{
+    const st = await fetch('/api/auth-status',{credentials:'same-origin'}).then(r=>r.json());
+    authReq = st.authRequired;
+    if(st.authRequired && !st.authenticated){ showLogin(); return; }
+    await refresh();
+  }catch(e){ toast(e.message,true); }
+}
+async function refresh(){ S = await api('GET','/api/state'); authReq = S.auth.enabled; document.body.classList.remove('locked'); render(); }
+
+$('#fLogin').onsubmit = async e=>{
+  e.preventDefault(); const f=e.target;
+  try{
+    await api('POST','/api/login',{user:f.user.value,password:f.password.value});
+    f.password.value=''; $('#dlgLogin').close(); await refresh();
+  }catch(err){ $('#loginErr').textContent=err.message; }
+};
+$('#btnLogout').onclick = async()=>{ try{await api('POST','/api/logout');}catch(e){} S.licences=[]; render(); showLogin(); };
 
 function render(){
+  if(!S.config || !S.config.alerteJours) return;
   const a = S.config.alerteJours;
   const L = S.licences;
+  $('#banner').classList.toggle('show', !S.auth.enabled);
+  $('#btnLogout').style.display = S.auth.enabled ? '' : 'none';
   const cnt = {EX:0,UR:0,AN:0,OK:0}; L.forEach(l=>cnt[cls(l)]++);
-  const kp = [['EX','Expirés',cnt.EX],['UR','Urgent (≤ 30 j)',cnt.UR],['AN',`À anticiper (≤ ${a} j)`,cnt.AN],['OK','OK',cnt.OK]];
-  $('#kpis').innerHTML = kp.map(([k,t,n])=>`<div class="kpi ${filterStat===k?'active':''}" data-k="${k}"><b><span class="pill ${k}">${n}</span></b><span>${t}</span></div>`).join('')
-    + `<div class="kpi" style="cursor:default"><b>${eur(L.filter(l=>l.joursRestants<=a).reduce((s,l)=>s+(l.cout||0),0))}</b><span>À commander (fenêtre ${a} j)</span></div>`;
+  const kp = [['EX',t('kpi.expired'),cnt.EX],['UR',t('kpi.urgent'),cnt.UR],['AN',t('kpi.soon',a),cnt.AN],['OK',t('kpi.ok'),cnt.OK]];
+  $('#kpis').innerHTML = kp.map(([k,tt,n])=>`<div class="kpi ${filterStat===k?'active':''}" data-k="${k}"><b><span class="pill ${k}">${n}</span></b><span>${tt}</span></div>`).join('')
+    + `<div class="kpi" style="cursor:default"><b>${eur(L.filter(l=>l.joursRestants<=a).reduce((s,l)=>s+(l.cout||0),0))}</b><span>${t('kpi.toorder',a)}</span></div>`;
   document.querySelectorAll('.kpi[data-k]').forEach(e=>e.onclick=()=>{filterStat=filterStat===e.dataset.k?null:e.dataset.k;render();});
 
-  $('#thead').innerHTML = COLS.map(([k,t])=>`<th data-k="${k}">${t}${sortKey===k?(sortDir>0?' ▲':' ▼'):''}</th>`).join('');
+  $('#thead').innerHTML = COLS.map(k=>`<th data-k="${k}">${k==='actions'?'':t('col.'+k)}${sortKey===k?(sortDir>0?' ▲':' ▼'):''}</th>`).join('');
   document.querySelectorAll('#thead th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(k==='actions')return;sortDir=sortKey===k?-sortDir:1;sortKey=k;render();});
 
   const q = $('#q').value.trim().toLowerCase();
   let rows = L.filter(l=>(!filterStat||cls(l)===filterStat) &&
     (!q || [l.nom,l.editeur,l.service,l.groupe,l.nomenclature,l.commentaire].join(' ').toLowerCase().includes(q)));
-  rows.sort((x,y)=>{let a=x[sortKey],b=y[sortKey];if(a==null)a='';if(b==null)b='';return (typeof a==='number'&&typeof b==='number'?a-b:String(a).localeCompare(String(b),'fr'))*sortDir;});
+  rows.sort((x,y)=>{let a=x[sortKey],b=y[sortKey];if(sortKey==='statut'){a=x.statutCode;b=y.statutCode;}if(a==null)a='';if(b==null)b='';return (typeof a==='number'&&typeof b==='number'?a-b:String(a).localeCompare(String(b),getLang()))*sortDir;});
 
   $('#tbody').innerHTML = rows.map(l=>{
     const c = cls(l);
-    const lab = l.statut + (!l.relanceActive?' · relance off':'');
+    const lab = statLabel(l) + (!l.relanceActive?' · '+t('relance.off'):'');
     return `<tr>
       <td><b>${esc(l.nom)}</b>${l.commentaire?`<div class="hint">${esc(l.commentaire)}</div>`:''}</td>
       <td>${esc(l.editeur)}</td><td>${esc(l.nomenclature)}</td><td>${esc(l.service)}</td>
-      <td class="num">${fr(l.debut)}</td><td class="num">${l.duree} an${l.duree>1?'s':''}</td>
-      <td class="num">${fr(l.echeance)}</td>
+      <td class="num">${fd(l.debut)}</td><td class="num">${yrs(l.duree)}</td>
+      <td class="num">${fd(l.echeance)}</td>
       <td class="num"><b class="n${c}">${l.joursRestants}</b></td>
       <td><span class="pill ${c}">${esc(lab)}</span></td>
       <td class="num">${eur(l.cout)}</td><td>${esc(l.groupe)}</td>
-      <td><div class="actions"><button class="sm go" data-cmd="${l.id}" title="Commande passée : réinitialise le compteur">✔ Commande faite</button><button class="sm" data-edit="${l.id}">Modifier</button></div></td>
-    </tr>`;}).join('') || `<tr><td colspan="12" class="muted" style="padding:20px;text-align:center">Aucun résultat</td></tr>`;
+      <td><div class="actions"><button class="sm go" data-cmd="${l.id}" title="${esc(t('btn.cmd.tip'))}">${t('btn.cmd')}</button><button class="sm" data-edit="${l.id}">${t('btn.edit')}</button></div></td>
+    </tr>`;}).join('') || `<tr><td colspan="12" class="muted" style="padding:20px;text-align:center">${t('noresult')}</td></tr>`;
   document.querySelectorAll('[data-cmd]').forEach(b=>b.onclick=()=>openCmd(b.dataset.cmd));
   document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openLic(b.dataset.edit));
-  $('#legend').textContent = `Alerte mail ${a} jours avant l'échéance, puis relance tous les ${S.config.relanceJours} jours à ${S.config.heureEnvoi} jusqu'à « Commande faite ». Destinataires : ${S.config.destinataires.length?S.config.destinataires.join(', '):'⚠ aucun configuré (⚙ Paramètres)'}.`;
+  $('#legend').textContent = t('legend',a,S.config.relanceJours,S.config.heureEnvoi,S.config.destinataires.length?S.config.destinataires.join(', '):t('legend.none'));
 }
+window.onLangChange = () => {
+  document.querySelectorAll('.y1').forEach(o=>o.textContent=yrs(1));
+  document.querySelectorAll('.y2').forEach(o=>o.textContent=yrs(2));
+  document.querySelectorAll('.y3').forEach(o=>o.textContent=yrs(3));
+  $('#langSel').value=getLang();
+  render();
+};
+$('#langSel').onchange=e=>setLang(e.target.value);
+
+// ----- Sécurité -----
+const fSec=$('#fSec');
+function openSec(){
+  const a=S.auth||{};
+  const env=!!a.managedByEnv;
+  $('#secState').textContent = env ? t('sec.env') : a.enabled ? t('sec.on',a.user) : t('sec.off');
+  fSec.user.value = a.user || 'admin'; fSec.cur.value=''; fSec.pw.value=''; fSec.pw2.value='';
+  $('#secCurRow').style.display = a.enabled && !env ? '' : 'none';
+  $('#secFields').style.display = env ? 'none' : '';
+  $('#secSave').style.display = env ? 'none' : '';
+  $('#secOff').style.display = a.enabled && !env ? '' : 'none';
+  $('#dlgSec').showModal();
+}
+$('#btnSec').onclick=openSec; $('#bannerBtn').onclick=openSec;
+$('#secCancel').onclick=()=>$('#dlgSec').close();
+fSec.onsubmit=async e=>{
+  e.preventDefault();
+  if(fSec.pw.value!==fSec.pw2.value) return toast(t('sec.mismatch'),true);
+  try{ await api('POST','/api/auth/password',{user:fSec.user.value,newPassword:fSec.pw.value,currentPassword:fSec.cur.value});
+    $('#dlgSec').close(); await refresh(); toast(t('sec.saved')); }catch(err){ toast(err.message,true); }
+};
+$('#secOff').onclick=async()=>{
+  if(!confirm(t('sec.confirm.disable'))) return;
+  try{ await api('POST','/api/auth/disable',{currentPassword:fSec.cur.value}); $('#dlgSec').close(); await refresh(); toast(t('sec.disabled')); }catch(err){ toast(err.message,true); }
+};
 
 // ----- Fiche licence -----
 const fLic = $('#fLic');
 function calcLic(){
   const d=fLic.debut.value, n=+fLic.duree.value;
   const box=$('#calcLic');
-  if(!d){box.textContent='Renseigne la date de début pour calculer l\'échéance.';box.className='calc warn';return;}
+  if(!d){box.textContent=t('calc.need');box.className='calc warn';return;}
   const e=addYears(d,n), j=daysBetween(e,S.today);
-  box.textContent=`Fin d'engagement calculée : ${fr(e)}  (${j>=0?'dans '+j+' jours':'expirée depuis '+(-j)+' jours'})`;
+  box.textContent=t('calc.end',fd(e),j>=0?t('calc.in',j):t('calc.ago',-j));
   box.className='calc'+(j<=S.config.alerteJours?' warn':'');
 }
 fLic.debut.oninput=fLic.duree.onchange=calcLic;
 function openLic(id){
   $('#svcList').innerHTML=Object.keys(S.config.routageServices||{}).map(k=>`<option value="${esc(k)}">`).join('');
   editing = id ? S.licences.find(l=>l.id===id) : null;
-  $('#licTitle').textContent = editing?'Modifier le logiciel':'Nouveau logiciel';
+  $('#licTitle').textContent = editing?t('lic.edit'):t('lic.new');
   $('#btnDel').style.display = editing?'':'none';
   const l = editing || {nom:'',editeur:'',nomenclature:'',debut:S.today,duree:1,cout:'',service:'',groupe:'',commentaire:'',relanceActive:true,destinatairesExtra:[]};
   fLic.nom.value=l.nom; fLic.editeur.value=l.editeur; fLic.nomenclature.value=l.nomenclature;
@@ -261,13 +362,14 @@ fLic.onsubmit = async e=>{
     commentaire:fLic.commentaire.value,relanceActive:fLic.relanceActive.value==='1',
     destinatairesExtra:fLic.destinatairesExtra.value.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean)};
   try{
-    editing ? await api('PUT','/api/licences/'+editing.id,body) : await api('POST','/api/licences',body);
-    $('#dlgLic').close(); await refresh(); toast(editing?'Modifications enregistrées':'Logiciel ajouté');
+    const was=editing;
+    was ? await api('PUT','/api/licences/'+was.id,body) : await api('POST','/api/licences',body);
+    $('#dlgLic').close(); await refresh(); toast(was?t('toast.saved'):t('toast.added'));
   }catch(err){toast(err.message,true);}
 };
 $('#btnDel').onclick=async()=>{
-  if(!editing||!confirm(`Supprimer définitivement « ${editing.nom} » ?`))return;
-  try{await api('DELETE','/api/licences/'+editing.id);$('#dlgLic').close();await refresh();toast('Supprimé');}catch(err){toast(err.message,true);}
+  if(!editing||!confirm(t('confirm.del',editing.nom)))return;
+  try{await api('DELETE','/api/licences/'+editing.id);$('#dlgLic').close();await refresh();toast(t('toast.deleted'));}catch(err){toast(err.message,true);}
 };
 $('#btnAdd').onclick=()=>openLic(null);
 
@@ -276,12 +378,12 @@ const fCmd=$('#fCmd');
 function calcCmd(){
   if(!fCmd.debut.value)return;
   const e=addYears(fCmd.debut.value,+fCmd.duree.value);
-  $('#calcCmd').textContent=`Nouvelle échéance : ${fr(e)}  (dans ${daysBetween(e,S.today)} jours)`;
+  $('#calcCmd').textContent=t('calc.newend',fd(e),daysBetween(e,S.today));
 }
 fCmd.debut.oninput=fCmd.duree.onchange=calcCmd;
 function openCmd(id){
   const l=S.licences.find(x=>x.id===id); cmdId=id;
-  $('#cmdIntro').innerHTML=`<b>${esc(l.nom)}</b> — échéance actuelle ${fr(l.echeance)} (${l.joursRestants} j).`;
+  $('#cmdIntro').innerHTML=`<b>${esc(l.nom)}</b> — ${esc(t('cmd.intro',fd(l.echeance),l.joursRestants))}`;
   fCmd.debut.value=l.echeance; fCmd.duree.value=l.duree; fCmd.cout.value=l.cout??'';
   calcCmd(); $('#dlgCmd').showModal();
 }
@@ -290,7 +392,7 @@ fCmd.onsubmit=async e=>{
   e.preventDefault();
   try{
     await api('POST',`/api/licences/${cmdId}/commande`,{debut:fCmd.debut.value,duree:+fCmd.duree.value,cout:fCmd.cout.value});
-    $('#dlgCmd').close(); await refresh(); toast('Compteur réinitialisé — relances arrêtées pour ce logiciel');
+    $('#dlgCmd').close(); await refresh(); toast(t('toast.reset'));
   }catch(err){toast(err.message,true);}
 };
 
@@ -300,13 +402,17 @@ function openCfg(){
   const c=S.config;
   fCfg.destinataires.value=c.destinataires.join('\n');
   fCfg.routage.value=Object.entries(c.routageServices||{}).map(([k,v])=>k+' : '+v.join(', ')).join('\n'); fCfg.alerteJours.value=c.alerteJours; fCfg.relanceJours.value=c.relanceJours;
-  fCfg.heureEnvoi.value=c.heureEnvoi; fCfg.urlAppli.value=c.urlAppli; fCfg.expediteur.value=c.expediteur;
+  fCfg.heureEnvoi.value=c.heureEnvoi; fCfg.urlAppli.value=c.urlAppli; fCfg.expediteur.value=c.expediteur; fCfg.langue.value=c.langue||'fr';
   fCfg.host.value=c.smtp.host; fCfg.port.value=c.smtp.port; fCfg.user.value=c.smtp.user; fCfg.pass.value='';
+  fCfg.pass.placeholder = c.smtp.passSet ? t('cfg.pass.set') : '';
   fCfg.secure.checked=c.smtp.secure; fCfg.ignoreTLSErrors.checked=c.smtp.ignoreTLSErrors;
   $('#journal').innerHTML=S.journal.slice(0,30).map(j=>{
-    const d=new Date(j.date).toLocaleString('fr-FR',{timeZone:'Europe/Paris'});
-    const t={relance:'Relance',test:'Test',commande:'Commande'}[j.type]||j.type;
-    return `<li>${d} — ${t} ${j.ok?'✔':'✘'} ${esc(j.nb?j.nb+' licence(s)':'')} ${esc(j.detail||'')} ${j.destinataires?'→ '+esc(j.destinataires.join(', ')):''} ${j.erreur?'<b>'+esc(j.erreur)+'</b>':''}</li>`;}).join('')||'<li>Aucun envoi pour le moment</li>';
+    const d=new Date(j.date).toLocaleString(isFr()?'fr-FR':'en-GB');
+    const ty=t('j.'+j.type);
+    const nb=j.nb?t('j.nlic',j.nb):'';
+    const det=(j.licences&&j.licences.length&&j.type==='commande')?j.licences.join(', '):'';
+    const svc=j.service&&j.service!=='*'?`[${esc(j.service)}] `:'';
+    return `<li>${d} — ${ty} ${j.ok?'✔':'✘'} ${svc}${esc(nb)} ${esc(det)} ${j.destinataires?'→ '+esc(j.destinataires.join(', ')):''} ${j.erreur?'<b>'+esc(j.erreur)+'</b>':''}</li>`;}).join('')||`<li>${t('cfg.journal.none')}</li>`;
   $('#dlgCfg').showModal();
 }
 function parseRoutage(txt){
@@ -320,35 +426,36 @@ function parseRoutage(txt){
 }
 function cfgBody(){
   return {routageServices:parseRoutage(fCfg.routage.value),destinataires:fCfg.destinataires.value.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean),
-    alerteJours:fCfg.alerteJours.value,relanceJours:fCfg.relanceJours.value,heureEnvoi:fCfg.heureEnvoi.value,
+    alerteJours:fCfg.alerteJours.value,relanceJours:fCfg.relanceJours.value,heureEnvoi:fCfg.heureEnvoi.value,langue:fCfg.langue.value,
     urlAppli:fCfg.urlAppli.value,expediteur:fCfg.expediteur.value,
     smtp:{host:fCfg.host.value,port:fCfg.port.value,user:fCfg.user.value,pass:fCfg.pass.value,secure:fCfg.secure.checked,ignoreTLSErrors:fCfg.ignoreTLSErrors.checked}};
 }
 $('#btnConfig').onclick=openCfg;
 $('#cfgCancel').onclick=()=>$('#dlgCfg').close();
-fCfg.onsubmit=async e=>{e.preventDefault();try{await api('POST','/api/config',cfgBody());$('#dlgCfg').close();await refresh();toast('Paramètres enregistrés');}catch(err){toast(err.message,true);}};
+fCfg.onsubmit=async e=>{e.preventDefault();try{await api('POST','/api/config',cfgBody());$('#dlgCfg').close();await refresh();toast(t('toast.cfg'));}catch(err){toast(err.message,true);}};
 $('#cfgTest').onclick=async()=>{
-  try{await api('POST','/api/config',cfgBody());await refresh();toast('Envoi du mail de test…');
-    const r=await api('POST','/api/test-mail'); toast('Mail de test envoyé à '+r.destinataires.join(', '));}
+  try{await api('POST','/api/config',cfgBody());await refresh();toast(t('toast.sending'));
+    const r=await api('POST','/api/test-mail'); toast(t('toast.testok',r.destinataires.join(', ')));}
   catch(err){toast(err.message,true);}
-  await refresh();
+  try{await refresh();}catch(e){}
 };
 $('#btnRelance').onclick=async()=>{
-  if(!confirm('Envoyer maintenant le mail de relance à tous les destinataires pour les licences dans la fenêtre d\'alerte ?'))return;
-  try{const r=await api('POST','/api/relance-maintenant');toast(r.envoye?`Relance envoyée (${r.nb} licence(s))`:'Rien à relancer pour le moment');await refresh();}
+  if(!confirm(t('confirm.relance')))return;
+  try{const r=await api('POST','/api/relance-maintenant');toast(r.envoye?t('toast.relanced',r.nb):t('toast.nothing'));await refresh();}
   catch(err){toast(err.message,true);}
 };
 
 // ----- Export CSV -----
 $('#btnExport').onclick=()=>{
-  const h=['Nom','Éditeur','Nomenclature','Début','Durée (ans)','Échéance','Jours restants','Statut','Coût','Groupe','Commentaire'];
+  const h=t('csv.h');
   const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-  const lines=[h.map(q).join(';')].concat(S.licences.map(l=>[l.nom,l.editeur,l.nomenclature,fr(l.debut),l.duree,fr(l.echeance),l.joursRestants,l.statut,l.cout==null?'':String(l.cout).replace('.',','),l.groupe,l.commentaire].map(q).join(';')));
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv'}));
+  const lines=[h.map(q).join(';')].concat(S.licences.map(l=>[l.nom,l.editeur,l.nomenclature,l.service,fd(l.debut),l.duree,fd(l.echeance),l.joursRestants,statLabel(l),l.cout==null?'':String(l.cout).replace('.',isFr()?',':'.'),l.groupe,l.commentaire].map(q).join(';')));
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv'}));
   a.download='licences_'+S.today+'.csv';a.click();
 };
 $('#q').oninput=render;
-refresh().catch(e=>toast(e.message,true));
+applyI18n();
+boot();
 </script>
 </body>
 </html>

@@ -5,7 +5,7 @@ APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 PORT="${PORT:-8091}"
 NODE="${NODE:-$(command -v node)}"
 cd "$APP_DIR" || exit 1
-if curl -s -o /dev/null --max-time 3 "http://127.0.0.1:$PORT/api/state"; then
+if curl -s -o /dev/null --max-time 3 "http://127.0.0.1:$PORT/api/auth-status"; then
   exit 0
 fi
 PORT="$PORT" nohup "$NODE" server.js >> suivi.log 2>&1 &

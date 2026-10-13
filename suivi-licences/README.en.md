@@ -4,29 +4,35 @@
 
 A small self-hosted web app to **track software license, maintenance and subscription renewals** and **send e-mail reminders** when an order has to be placed. No database, no framework: one Node.js server and one JSON file.
 
-> **Note:** the user interface is currently in French. The code is small and every label is in `public/index.html`, so translations and i18n contributions are welcome.
+> The interface and the e-mails are available in **French and English** (switch in the header; mail language in the settings). Adding a language only means adding a block to `public/i18n.js` and `I18N` in `server.js`. The app can be protected by a password (see [Security](#security)).
 
 ## Screenshots
 
 Dashboard with statuses, counters and the amount to order:
 
-![Dashboard](docs/screenshots/01-tableau.png)
+![Dashboard](docs/screenshots/en/01-tableau.png)
 
 Adding software: the end of the commitment is computed automatically from the chosen term (1, 2 or 3 years):
 
-![Add a license](docs/screenshots/02-ajout-licence.png)
+![Add a license](docs/screenshots/en/02-ajout-licence.png)
 
-"Commande faite" (order placed): the counter restarts on a new period and reminders stop:
+"Order placed": the counter restarts on a new period and reminders stop:
 
-![Order placed](docs/screenshots/03-commande-faite.png)
+![Order placed](docs/screenshots/en/03-commande-faite.png)
 
 Settings: recipients, per-department routing, SMTP and sending log:
 
-![Settings](docs/screenshots/04-parametres.png)
+![Settings](docs/screenshots/en/04-parametres.png)
 
 Reminder e-mail received by the recipients of the relevant department:
 
-![Reminder e-mail](docs/screenshots/05-mail-relance.png)
+![Reminder e-mail](docs/screenshots/en/05-mail-relance.png)
+
+Password protection (login page and security dialog):
+
+![Login](docs/screenshots/en/07-connexion.png)
+
+![Security](docs/screenshots/en/06-securite.png)
 
 ## Features
 
@@ -189,17 +195,18 @@ Port `8091` is published and data is kept in `./data` (mounted volume). To chang
 
 ## First-time setup
 
-Open `http://server-address:8091`, then **⚙ Paramètres & mails** (Settings & mails):
+Open `http://server-address:8091`, then **⚙ Settings & mail**:
 
 1. **SMTP server**: address and port of your mail relay (often `25` for an internal relay, `587` with authentication, `465` with *SSL direct* ticked). Fill in the user and password only if the relay requires it.
 2. **Sender**: an address accepted by the relay (some relays only allow certain sender addresses).
 3. **Recipients**: the addresses that receive the reminders, one per line.
-4. **Per-department routing** (optional): so that a department receives its own reminders, add one line per department as `53 : head@example.org, manager@example.org`. Licenses whose **Service** field equals `53` are then sent only to those addresses, in a separate mail.
+4. **Per-department routing** (optional): so that a department receives its own reminders, add one line per department as `53 : head@example.org, manager@example.org`. Licenses whose **Department** field equals `53` are then sent only to those addresses, in a separate mail.
 5. **App URL**: the address of the app, added as a link in the mails so people can mark orders as done.
-6. Click **Envoyer un mail de test** (send a test mail) to validate the relay. Sending errors appear in the *Journal des envois* (sending log) at the bottom of the window.
-7. **Enregistrer** (save).
+6. Click **Send a test mail** to validate the relay. Sending errors appear in the *Sending log* at the bottom of the window.
+7. Choose the **mail language** (French or English), then **Save**.
+8. Click **🔒 Security** to set a password.
 
-The sample licenses are only there for testing: delete them (*Modifier* > *Supprimer*), then add the real ones with **+ Nouveau logiciel**. Fill in the **Service** field of the licenses concerned by routing.
+The sample licenses are only there for testing: delete them (*Edit* > *Delete*), then add the real ones with **+ New software**. Fill in the **Department** field of the licenses concerned by routing.
 
 From then on, a mail is sent every day at the configured time (08:00 by default) for licenses less than 60 days from their end date, and repeated every 7 days until someone clicks **✔ Commande faite**.
 
@@ -230,7 +237,7 @@ The whole state (licenses, settings, log) lives in `data/data.json`. Copy it reg
 | `node: command not found` in the scheduled task | Give the full path: `NODE=/usr/local/bin/node`. |
 | Test mail fails | Check the SMTP server and port, SSL mode, authentication, and that the sender is allowed on the relay. The exact message is in the sending log. |
 | Remaining days or statuses are wrong | Check the server date and time zone (`date`). The time zone is set with the `TZ` variable. |
-| No mail arrives although the test works | Check that the **Service** field of the licenses matches a routing code, and that at least one license is less than 60 days from its end date. The **✉ Relancer maintenant** button forces a send. |
+| No mail arrives although the test works | Check that the **Department** field of the licenses matches a routing code, and that at least one license is less than 60 days from its end date. The **✉ Relancer maintenant** button forces a send. |
 
 ## Configuration
 
@@ -241,11 +248,15 @@ The whole state (licenses, settings, log) lives in `data/data.json`. Copy it reg
 | Reminder every | 7 days |
 | Daily sending time | 08:00 (`TZ` time zone, `Europe/Paris` by default) |
 
-Environment variables: `PORT` (8091), `DATA_DIR` (`./data`), `TZ`.
+Environment variables: `PORT` (8091), `DATA_DIR` (`./data`), `TZ`, `APP_USER` / `APP_PASSWORD` (optional, enable password protection), `TRUST_PROXY` (`1` behind a reverse proxy).
 
 ## Security
 
-The app **has no authentication**: it is meant for an internal network. Do not expose it to the Internet without an authenticating reverse proxy. The SMTP password, if any, is stored in clear text in `data/data.json` (folder excluded from the repository).
+- **Password protection**: out of the box the app is open (so the first setup is easy) and a banner reminds you. Click **🔒 Security** to set a username and password (8 characters minimum). Passwords are stored hashed (scrypt); the session is a signed `HttpOnly`, `SameSite=Strict` cookie valid 12 h. After 5 failed attempts an IP is locked for 5 minutes.
+- **Managed by the server**: set `APP_USER` and `APP_PASSWORD` environment variables (e.g. in `docker-compose.yml`); the password can then only be changed on the server. Handy for automated deployments.
+- **Locked out?** Stop the app, delete the `"auth"` entry of `data/data.json` (or start it once with `APP_PASSWORD=...`) and restart.
+- **HTTPS**: the app speaks plain HTTP. Outside a trusted LAN, put it behind a reverse proxy with TLS (the cookie is then marked `Secure`); if the proxy forwards the client IP, set `TRUST_PROXY=1` so the lockout works per client.
+- The SMTP password is stored in clear text in `data/data.json` (mode `600`, folder excluded from the repository) and is never sent back to the browser.
 
 ## License
 
