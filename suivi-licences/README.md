@@ -242,3 +242,11 @@ Variables d'environnement : `PORT` (8091), `DATA_DIR` (`./data`), `TZ`.
 ## Sécurité
 
 L'application **n'a pas d'authentification** : elle est prévue pour un réseau interne. Ne pas l'exposer sur Internet sans reverse proxy authentifié. Le mot de passe SMTP éventuel est stocké en clair dans `data/data.json` (dossier exclu du dépôt).
+
+## Soutenir le projet
+
+Cette application est libre et gratuite. Si elle vous fait gagner du temps, vous pouvez m'offrir un café pour m'aider à la maintenir et à la faire évoluer. C'est tout sauf obligatoire, mais ça fait toujours plaisir !
+
+[![Offrir un café](https://img.shields.io/badge/Offrir_un_caf%C3%A9-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/neoloop)
+
+Une idée, un bug ? Ouvrez une [issue](https://github.com/neoloop/logiciels/issues).
