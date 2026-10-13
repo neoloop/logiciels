@@ -74,3 +74,7 @@ Pour changer la liste proposée par défaut, modifier la constante `DEFAULTS` au
 
 - Le test vérifie qu'un **port répond**, pas que l'application fonctionne correctement.
 - Un service qui n'accepte pas les requêtes depuis votre poste (pare-feu) apparaît « hors ligne » même s'il tourne.
+
+---
+
+Ce projet est libre et gratuit. S'il vous est utile, vous pouvez [m'offrir un café ☕](https://buymeacoffee.com/neoloop).

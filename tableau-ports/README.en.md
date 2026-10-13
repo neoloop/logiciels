@@ -74,3 +74,7 @@ To change the default list, edit the `DEFAULTS` constant at the top of the `<scr
 
 - The check only confirms a **port answers**, not that the application works properly.
 - A service that refuses requests from your machine (firewall) shows as « offline » even if it is running.
+
+---
+
+This project is free and open source. If it is useful to you, you can [buy me a coffee ☕](https://buymeacoffee.com/neoloop).
