@@ -10,9 +10,9 @@
 
 ## [tableau-ports](tableau-ports/)
 
-🇫🇷 Page HTML autonome pour vérifier d'un coup d'œil si vos services web internes (hôte, port, chemin) répondent. Voir le [README](tableau-ports/README.md).
+🇫🇷 Page HTML autonome pour vérifier d'un coup d'œil si vos services web internes (hôte, port, chemin) répondent. Voir le [README en français](tableau-ports/README.md), avec captures d'écran et tutoriel d'installation.
 
-🇬🇧 Standalone HTML page to check at a glance whether your internal web services (host, port, path) are up. See the [README](tableau-ports/README.md).
+🇬🇧 Standalone HTML page to check at a glance whether your internal web services (host, port, path) are up. See the [English README](tableau-ports/README.en.md).
 
 ## Licence / License
 
