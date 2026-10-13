@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tableau de ports – Services SIC</title>
+<style>
+  :root{--bg:#0f172a;--card:#1e293b;--txt:#e2e8f0;--mut:#94a3b8;--ok:#22c55e;--ko:#ef4444;--wait:#f59e0b;--line:#334155}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt);padding:24px}
+  h1{margin:0 0 4px;font-size:22px}
+  .sub{color:var(--mut);font-size:13px;margin-bottom:16px}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  button{background:#3b82f6;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-size:14px;cursor:pointer}
+  button.sec{background:#475569}
+  button:hover{filter:brightness(1.1)}
+  input{background:#0f172a;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:14px}
+  .sum{margin-left:auto;font-size:14px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:10px;overflow:hidden}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);font-size:14px}
+  th{background:#273449;color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  tr:last-child td{border-bottom:0}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--mut)}
+  .ok .dot{background:var(--ok)} .ok{color:var(--ok)}
+  .ko .dot{background:var(--ko)} .ko{color:var(--ko)}
+  .wait .dot{background:var(--wait)} .wait{color:var(--wait)}
+  .na{color:var(--mut)}
+  a{color:#93c5fd;text-decoration:none} a:hover{text-decoration:underline}
+  td input{width:100%}
+  td input.port{width:80px}
+  .x{background:transparent;color:var(--mut);padding:2px 8px}
+  .x:hover{color:var(--ko)}
+  .note{color:var(--mut);font-size:12px;margin-top:12px;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>Tableau de ports – Services SIC</h1>
+<div class="sub">Test depuis ton navigateur : il faut être sur le réseau qui voit le NAS (ou en VPN).</div>
+
+<div class="bar">
+  <label>Hôte par défaut <input id="host" size="16"></label>
+  <button id="btnTest">Tester tout</button>
+  <button class="sec" id="btnAdd">+ Ajouter</button>
+  <button class="sec" id="btnReset">Réinitialiser</button>
+  <label><input type="checkbox" id="auto"> Auto 60 s</label>
+  <span class="sum" id="sum"></span>
+</div>
+
+<table>
+  <thead><tr><th>Service</th><th>Hôte (vide = défaut)</th><th>Port</th><th>Chemin</th><th>État</th><th>Temps</th><th></th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+
+<div class="note">
+  « En ligne » = le serveur répond (peu importe la page). « Hors ligne » = connexion refusée ou délai de 4 s dépassé.<br>
+  Si la page est ouverte en https (ex. SharePoint), le navigateur bloque les tests http : ouvre-la en local (double-clic) ou depuis le NAS.<br>
+  Les modifications sont mémorisées dans ce navigateur.
+</div>
+
+<script>
+const KEY='tableau-ports-v1';
+const DEFAULTS={host:'192.168.1.10',items:[
+  {name:'Portail SIC (starter page)',host:'',port:8099,path:'/'},
+  {name:'Planning astreintes / congés',host:'',port:8090,path:'/'},
+  {name:'Suivi des licences',host:'',port:8091,path:'/'},
+  {name:'Portail finances (budget)',host:'',port:8765,path:'/portail_finances.html'},
+  {name:'Demandes de matériel',host:'',port:'',path:'/'}
+]};
+let S;
+try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!S||!S.items)S=JSON.parse(JSON.stringify(DEFAULTS));
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const urlOf=i=>'http://'+(i.host||S.host)+':'+i.port+(i.path||'/');
+
+function render(){
+  $('host').value=S.host;
+  $('rows').innerHTML=S.items.map((it,n)=>`<tr data-n="${n}">
+    <td><input data-f="name" value="${esc(it.name)}"></td>
+    <td><input data-f="host" value="${esc(it.host)}" placeholder="${esc(S.host)}"></td>
+    <td><input class="port" data-f="port" value="${esc(it.port)}"></td>
+    <td><input data-f="path" value="${esc(it.path)}"></td>
+    <td class="st"><span class="badge na"><span class="dot"></span>Non testé</span></td>
+    <td class="ms na">–</td>
+    <td><a class="lnk" target="_blank" rel="noopener" href="${it.port?esc(urlOf(it)):'#'}">Ouvrir</a> <button class="x" data-del="${n}" title="Supprimer">✕</button></td>
+  </tr>`).join('');
+  summary();
+}
+
+function setState(tr,cls,txt,ms){
+  tr.querySelector('.st').innerHTML=`<span class="badge ${cls}"><span class="dot"></span>${txt}</span>`;
+  const m=tr.querySelector('.ms');m.textContent=ms??'–';m.className='ms '+(ms?'':'na');
+  tr.dataset.s=cls;summary();
+}
+function summary(){
+  const t=[...document.querySelectorAll('#rows tr')];
+  const ok=t.filter(r=>r.dataset.s==='ok').length,ko=t.filter(r=>r.dataset.s==='ko').length;
+  $('sum').innerHTML=`<span class="ok">${ok} en ligne</span> · <span class="ko">${ko} hors ligne</span> · ${t.length} total`;
+}
+
+async function check(tr){
+  const it=S.items[+tr.dataset.n];
+  if(!it.port){setState(tr,'na','Port à renseigner');return}
+  setState(tr,'wait','Test…');
+  const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),4000);
+  const t0=performance.now();
+  try{
+    await fetch(urlOf(it),{mode:'no-cors',cache:'no-store',signal:ctl.signal});
+    setState(tr,'ok','En ligne',Math.round(performance.now()-t0)+' ms');
+  }catch(e){
+    setState(tr,'ko',ctl.signal.aborted?'Délai dépassé':'Hors ligne');
+  }finally{clearTimeout(to)}
+}
+const testAll=()=>Promise.all([...document.querySelectorAll('#rows tr')].map(check));
+
+$('rows').addEventListener('input',e=>{
+  const tr=e.target.closest('tr');if(!tr||!e.target.dataset.f)return;
+  S.items[+tr.dataset.n][e.target.dataset.f]=e.target.value.trim();save();
+  const it=S.items[+tr.dataset.n];tr.querySelector('.lnk').href=it.port?urlOf(it):'#';
+});
+$('rows').addEventListener('click',e=>{
+  if(e.target.dataset.del!==undefined){S.items.splice(+e.target.dataset.del,1);save();render()}
+});
+$('host').addEventListener('input',e=>{S.host=e.target.value.trim();save()});
+$('btnTest').onclick=testAll;
+$('btnAdd').onclick=()=>{S.items.push({name:'Nouveau service',host:'',port:'',path:'/'});save();render()};
+$('btnReset').onclick=()=>{if(confirm('Remettre la liste par défaut ?')){S=JSON.parse(JSON.stringify(DEFAULTS));save();render();testAll()}};
+let timer;
+$('auto').onchange=e=>{clearInterval(timer);if(e.target.checked)timer=setInterval(testAll,60000)};
+
+render();testAll();
+</script>
+</body>
+</html>

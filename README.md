@@ -8,6 +8,12 @@
 
 🇬🇧 Web app to track software license and subscription renewals, with per-department e-mail reminders (SMTP). Plain Node.js, data stored in a JSON file. See the [English README](suivi-licences/README.en.md). The interface is available in French and English.
 
+## [tableau-ports](tableau-ports/)
+
+🇫🇷 Page HTML autonome pour vérifier d'un coup d'œil si vos services web internes (hôte, port, chemin) répondent. Voir le [README](tableau-ports/README.md).
+
+🇬🇧 Standalone HTML page to check at a glance whether your internal web services (host, port, path) are up. See the [README](tableau-ports/README.md).
+
 ## Licence / License
 
 [MIT](LICENSE)
