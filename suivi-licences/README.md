@@ -2,6 +2,28 @@
 
 Petite application web auto-hébergée pour **suivre les échéances de licences, maintenances et abonnements logiciels**, et **relancer par mail** quand il faut passer commande. Aucune base de données ni framework : un serveur Node et un fichier JSON.
 
+## Aperçu
+
+Tableau de bord avec statuts, compteurs et montant à commander :
+
+![Tableau de bord](docs/screenshots/01-tableau.png)
+
+Ajout d'un logiciel : la fin d'engagement se calcule toute seule selon la durée choisie (1, 2 ou 3 ans) :
+
+![Ajout d'une licence](docs/screenshots/02-ajout-licence.png)
+
+« Commande faite » : le compteur repart sur une nouvelle période et les relances s'arrêtent :
+
+![Commande faite](docs/screenshots/03-commande-faite.png)
+
+Paramètres : destinataires, routage par service, SMTP et journal des envois :
+
+![Paramètres](docs/screenshots/04-parametres.png)
+
+Mail de relance reçu par les destinataires du service concerné :
+
+![Mail de relance](docs/screenshots/05-mail-relance.png)
+
 ## Fonctionnalités
 
 - **Durée d'engagement** de 1, 2 ou 3 ans : la date de fin est calculée automatiquement à partir du début de période.

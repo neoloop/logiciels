@@ -9,13 +9,13 @@
   --bg:#f4f6f9; --card:#fff; --ink:#1d2733; --muted:#6b7785; --line:#dde3ea;
   --navy:#1b3a5f; --navy2:#27507f;
   --ok:#1e7e4a; --ok-bg:#e4f3ea; --warn:#b9770e; --warn-bg:#fdecd2;
-  --urg:#c0392b; --urg-bg:#fbe3e0; --exp:#fff; --exp-bg:#4a1c1c;
+  --urg:#c0392b; --urg-bg:#fbe3e0; --exp:#fff; --exp-bg:#4a1c1c; --exp-num:#7a1f1f;
 }
 @media (prefers-color-scheme:dark){:root{
   --bg:#12171d; --card:#1b222b; --ink:#e6ebf0; --muted:#93a0ae; --line:#2c3643;
   --navy:#2b5486; --navy2:#3a6aa3;
   --ok:#5ed08e; --ok-bg:#16301f; --warn:#f0b24a; --warn-bg:#3a2c12;
-  --urg:#ff8a7d; --urg-bg:#3d1a17; --exp:#fff; --exp-bg:#6a2323;
+  --urg:#ff8a7d; --urg-bg:#3d1a17; --exp:#fff; --exp-bg:#6a2323; --exp-num:#ff8a7d;
 }}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 "Segoe UI",system-ui,Arial,sans-serif}
@@ -50,6 +50,7 @@ td.num{text-align:right;white-space:nowrap}
 .AN{background:var(--warn-bg);color:var(--warn)}
 .UR{background:var(--urg-bg);color:var(--urg)}
 .EX{background:var(--exp-bg);color:var(--exp)}
+.nOK{color:var(--ok)}.nAN{color:var(--warn)}.nUR{color:var(--urg)}.nEX{color:var(--exp-num)}
 .muted{color:var(--muted)}
 .actions{white-space:nowrap;display:flex;gap:5px}
 dialog{border:1px solid var(--line);border-radius:10px;padding:0;background:var(--card);color:var(--ink);width:min(680px,94vw)}
@@ -219,7 +220,7 @@ function render(){
       <td>${esc(l.editeur)}</td><td>${esc(l.nomenclature)}</td><td>${esc(l.service)}</td>
       <td class="num">${fr(l.debut)}</td><td class="num">${l.duree} an${l.duree>1?'s':''}</td>
       <td class="num">${fr(l.echeance)}</td>
-      <td class="num"><b class="${c}" style="background:none">${l.joursRestants}</b></td>
+      <td class="num"><b class="n${c}">${l.joursRestants}</b></td>
       <td><span class="pill ${c}">${esc(lab)}</span></td>
       <td class="num">${eur(l.cout)}</td><td>${esc(l.groupe)}</td>
       <td><div class="actions"><button class="sm go" data-cmd="${l.id}" title="Commande passée : réinitialise le compteur">✔ Commande faite</button><button class="sm" data-edit="${l.id}">Modifier</button></div></td>
